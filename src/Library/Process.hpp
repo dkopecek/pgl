@@ -154,11 +154,12 @@ namespace pgl
     void terminate(int signal);
     uint8_t expectedMessageHashBytePosition();
     uint8_t messageHashByteAt(size_t pos, const Message::Header* header, const uint8_t *data, size_t size);
-
+    void prepareMemberEnvVariables(char **& env_array);
   private:
     std::string _name;
     std::string _exec_path;
     std::string _exec_name;
+    std::vector<std::string> _keep_env;
 
     pid_t _pid;
     pid_t _pid_master;

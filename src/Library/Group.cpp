@@ -47,39 +47,43 @@ namespace pgl
     }
 
     const std::string exec_path(path_buffer, path_length);
-    const std::string exec_name = Process::pathBasename(exec_path);
-    const std::string arg0(argv[0]);
-    const std::string arg0_name = Process::pathBasename(arg0);
+    const char * exec_name_env = getenv("PGL_EXEC_NAME");
+    bool master_mode;
+    std::string exec_name;
+
+    if (exec_name_env == nullptr) {
+      exec_name = Process::pathBasename(exec_path);
+      master_mode = true;
+    }
+    else {
+      exec_name = exec_name_env;
+      master_mode = false;
+    }
 
     _exec_path = exec_path;
     _exec_name = exec_name;
 
-    if (exec_name == arg0_name) {
+    if (master_mode) {
       _master_mode = true;
       _member_instantiated = false;
+
+      sigset_t mask;
+      sigfillset(&mask);
+      sigdelset(&mask, SIGABRT);
+      sigdelset(&mask, SIGSEGV);
+      sigdelset(&mask, SIGILL);
+      sigdelset(&mask, SIGFPE);
+      sigdelset(&mask, SIGBUS);
+    
+      if ((_signal_fd = signalfd(-1, &mask, SFD_NONBLOCK|SFD_CLOEXEC)) == -1) {
+	throw std::runtime_error("Cannot create signal fd");
+      }
     }
     else {
       _master_mode = false;
       _member_instantiated = false;
-
-      if (arg0.find_first_of('/') == std::string::npos) {
-	throw std::runtime_error("Cannot find out requested process name from argv[0]");
-      }
-      else {
-	_requested_name = Process::pathBasename(arg0);
-      }
-    }
-
-    sigset_t mask;
-    sigfillset(&mask);
-    sigdelset(&mask, SIGABRT);
-    sigdelset(&mask, SIGSEGV);
-    sigdelset(&mask, SIGILL);
-    sigdelset(&mask, SIGFPE);
-    sigdelset(&mask, SIGBUS);
-    
-    if ((_signal_fd = signalfd(-1, &mask, SFD_NONBLOCK|SFD_CLOEXEC)) == -1) {
-      throw std::runtime_error("Cannot create signal fd");
+      _requested_name = exec_name;
+      _signal_fd = -1;
     }
 
     return;

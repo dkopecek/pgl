@@ -30,6 +30,7 @@ namespace pgl
     _bus_wfd = -1;
     _bus_rfd = -1;
     _state = Process::State::Initialized;
+    _keep_env = { "SSH_AUTH_SOCK", "GPG_AGENT_INFO" };
   }
 
   Process::~Process()
@@ -279,16 +280,7 @@ namespace pgl
     const pid_t pid = fork();
 
     if (pid == 0) {
-      /* child */
-
-      char **new_argv = new char *[argc+1];
-      new_argv[0] = ::strdup(_exec_name.c_str());
-
-      for (int i = 1; i < argc; ++i) {
-	new_argv[i] = ::strdup(argv[i]);
-      }
-      new_argv[argc] = nullptr;
-
+      /* Child */
       ::close(bus_fd[0]);
       ::close(STDIN_FILENO);
       ::close(STDOUT_FILENO);
@@ -303,9 +295,15 @@ namespace pgl
 	throw std::system_error(errno, std::system_category());
       }
 
+      char **exec_env = nullptr;
+      prepareMemberEnvVariables(exec_env);
+
+      if (exec_env == nullptr) {
+	throw std::runtime_error("BUG: invalid environment");
+      }
+
       preExecSetup();
-      ::execv(_exec_path.c_str(), new_argv);
-      delete [] new_argv; // XXX: free items
+      ::execvpe(_exec_path.c_str(), argv, exec_env);
       throw std::system_error(errno, std::system_category());
     }
     else if (pid == -1) {
@@ -317,6 +315,37 @@ namespace pgl
     ::close(bus_fd[1]);
 
     return pid;
+  }
+
+  void Process::prepareMemberEnvVariables(char **& env_array)
+  {
+    /*
+     * Allocate memory for the array. The maximum number of
+     * items is the number of environment variables to keep
+     * from the master process environment plus the PGL_EXEC_NAME
+     * variable plus an item for the nullptr (therefore +2).
+     */
+    const size_t env_count_max = _keep_env.size() + 2;
+    env_array = new char *[env_count_max];
+
+    std::string exec_name_var;
+    exec_name_var = "PGL_EXEC_NAME=";
+    exec_name_var += getName();
+    env_array[0] = strdup(exec_name_var.c_str());
+
+    size_t env_index = 1;
+    for (auto const& name : _keep_env) {
+      const char * const val = getenv(name.c_str());
+      if (val == nullptr) {
+	continue;
+      }
+      std::string var = name + "=" + val;
+      env_array[env_index] = strdup(var.c_str());
+      ++env_index;
+    }
+    env_array[env_index] = nullptr;
+
+    return;
   }
 
   const std::string Process::pathBasename(const std::string& path)
