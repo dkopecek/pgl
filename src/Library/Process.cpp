@@ -286,7 +286,17 @@ namespace pgl
       ::close(bus_fd[0]);
       ::close(STDIN_FILENO);
       ::close(STDOUT_FILENO);
-
+#if defined(NDEBUG)
+      ::close(STDERR_FILENO);
+      int null_fd = open("/dev/null", O_RDONLY);
+      if (null_fd == -1) {
+	throw std::system_error(errno, std::system_category());
+      }
+      if (::dup2(null_fd, STDERR_FILENO) == -1) {
+	::close(null_fd);
+	throw std::system_error(errno, std::system_category());
+      }
+#endif
       if (::dup2(bus_fd[1], STDIN_FILENO) == -1 ||
 	  ::dup2(bus_fd[1], STDOUT_FILENO) == -1) {
 	::close(bus_fd[1]);
