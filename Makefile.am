@@ -26,7 +26,8 @@ libpgl_la_SOURCES=\
 	src/Library/Message.cpp
 
 bin_PROGRAMS=\
-	test
+	test \
+	minprivs
 
 test_SOURCES=\
 	src/Examples/test.cpp
@@ -36,3 +37,13 @@ test_CPPFLAGS=\
 
 test_LDADD=\
 	$(top_builddir)/libpgl.la
+
+minprivs_SOURCES=\
+	src/Examples/minprivs.cpp
+
+minprivs_CPPFLAGS=\
+	-I$(top_srcdir)/src/Library
+
+minprivs_LDADD=\
+	$(top_builddir)/libpgl.la \
+	-lseccomp -lcap-ng
