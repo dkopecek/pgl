@@ -271,9 +271,11 @@ namespace pgl
       throw std::system_error(errno, std::system_category());
     }
 
-    fcntl(bus_fd[0], F_SETFL, O_NONBLOCK);
-    fcntl(bus_fd[1], F_SETFL, O_NONBLOCK);
-    
+    if (fcntl(bus_fd[0], F_SETFL, O_NONBLOCK) != 0 ||
+	fcntl(bus_fd[1], F_SETFL, O_NONBLOCK) != 0) {
+      throw std::system_error(errno, std::system_category());
+    }
+
     setMessageBusFDs(/*rfd=*/bus_fd[0], /*wfd=*/bus_fd[0]);
 
     /*-============= FORK  ===============- */
