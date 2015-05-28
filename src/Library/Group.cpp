@@ -23,6 +23,12 @@
 
 namespace pgl
 {
+  /////
+  //
+  // pgl::Group method definitions
+  //
+  /////
+
   Group::Group(int argc, char *argv[])
     : _process_argc(argc),
       _process_argv(argv)
@@ -116,9 +122,6 @@ namespace pgl
 	pid_t pid = process->spawn(_process_argc, _process_argv);
 	process->setPID(pid);
 	_process_by_pid[pid] = process;
-	int rfd = -1;
-	process->getMessageBusFDs(&rfd, nullptr);
-	_process_by_rfd[rfd] = process;
       }
     }
     catch(const std::exception& ex) {
@@ -228,7 +231,6 @@ namespace pgl
 
 	  if (queue.empty()) {
 	    it = _tasks_wr.erase(it);
-	    //++it;
 	    continue;
 	  }
 	}
@@ -323,4 +325,277 @@ namespace pgl
     _tasks_wr[fd].push(task);
     return;
   }
+
+  void Group::masterHandleBusMessage(Message& msg, int from_fd)
+  {
+    msg.validate();
+
+    switch(msg.getType())
+      {
+      case Message::Type::M2M:
+	masterRouteMessage(msg);
+	break;
+      case Message::Type::BUS_PID_LOOKUP:
+	masterPIDLookupReply(msg, from_fd);
+	break;
+      default:
+	throw std::runtime_error("Unknown message type");
+      }
+
+    return;
+  }
+
+  void Group::masterRouteMessage(Message& msg)
+  {
+    const pid_t pid_to = msg.getTo();
+    auto const& process = _process_by_pid[pid_to];
+    int fd = -1;
+    process->getMessageBusFDs(nullptr, &fd);
+    std::shared_ptr<FDTask> task = std::make_shared<MessageSendTask>(fd, msg);
+    masterAddWriteTask(task);
+    return;
+  }
+
+  void Group::masterPIDLookupReply(Message& msg, int from_fd)
+  {
+    const std::string name(reinterpret_cast<const char *>(msg.data()), msg.dataSize());
+    pid_t pid = -1;
+
+    auto range = _process_by_name.equal_range(name);
+    for (auto entry = range.first; entry != range.second; ++entry) {
+      auto process = entry->second;
+      pid = process->getPID();
+      break;
+    }
+
+    Message reply(sizeof(pid_t));
+    reply.setFrom(0);
+    reply.setTo(msg.getFrom());
+    reply.setType(Message::Type::BUS_PID_LOOKUP);
+    reply.copyToData(&pid, sizeof (pid_t));
+    reply.finalize();
+
+    std::shared_ptr<FDTask> task = std::make_shared<MessageSendTask>(from_fd, reply);
+    masterAddWriteTask(task);
+    return;
+  }
+
+  /////
+  //
+  // pgl::Group::FDTask method definitions
+  //
+  /////
+
+  Group::FDTask::FDTask(const int fd)
+    : _fd(fd)
+  {
+    /* Empty */
+  }
+
+  bool Group::FDTask::operator==(const Group::FDTask& rhs) const
+  {
+    return _fd == rhs._fd;
+  }
+
+  bool Group::FDTask::operator<(const Group::FDTask& rhs) const
+  {
+    return _fd < rhs._fd;
+  }
+
+  bool Group::FDTask::operator>(const Group::FDTask& rhs) const
+  {
+    return _fd > rhs._fd;
+  }
+
+  int Group::FDTask::fd() const
+  {
+    return _fd;
+  }
+
+  /////
+  //
+  // pgl::Group::FDRecvTask method definitions
+  //
+  /////
+
+  Group::FDRecvTask::FDRecvTask(int fd, void *recv_buffer, size_t recv_size)
+    : Group::FDTask(fd)
+  {
+    _size_received = 0;
+    _size_total = recv_size;
+    _buffer = reinterpret_cast<uint8_t*>(recv_buffer);
+  }
+
+  bool Group::FDRecvTask::run(Group& group)
+  {
+    if (receive()) {
+      return process(group);
+    }
+    return false;
+  }
+
+  void Group::FDRecvTask::setReceiveBuffer(void *buffer)
+  {
+    _buffer = reinterpret_cast<uint8_t*>(buffer);
+    return;
+  }
+
+  void Group::FDRecvTask::setReceiveSize(size_t size)
+  {
+    _size_total = size;
+    return;
+  }
+
+  bool Group::FDRecvTask::receive()
+  {
+    if (_size_received == _size_total) {
+      return true;
+    }
+
+    const size_t size_toread = _size_total - _size_received;
+    uint8_t * const buffer = _buffer + _size_received;
+    const ssize_t size_read = read(fd(), buffer, size_toread);
+
+    if (size_read < 0) {
+      if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+	return false;
+      }
+      else {
+	throw std::runtime_error("FDRecvTask failed");
+      }
+    }
+    else if (size_read == 0) {
+      throw std::runtime_error("fd closed");
+    }
+    else {
+      _size_received += size_read;
+    }
+
+    return _size_received == _size_total;
+  }
+
+  /////
+  //
+  // pgl::Group::FDSendTask method definitions
+  //
+  /////
+
+  Group::FDSendTask::FDSendTask(int fd, void *send_buffer, size_t send_size)
+    : Group::FDTask(fd)
+  {
+    _size_written = 0;
+    _size_total = send_size;
+    _buffer = reinterpret_cast<const uint8_t*>(send_buffer);
+  }
+
+  bool Group::FDSendTask::run(Group& group)
+  {
+    return send();
+  }
+
+  void Group::FDSendTask::setSendBuffer(const void *buffer)
+  {
+    _buffer = reinterpret_cast<const uint8_t*>(buffer);
+    return;
+  }
+
+  void Group::FDSendTask::setSendSize(size_t size)
+  {
+    _size_total = size;
+    return;
+  }
+
+  bool Group::FDSendTask::inProgress() const
+  {
+    return _size_written > 0;
+  }
+
+  bool Group::FDSendTask::send()
+  {
+    if (_size_written == _size_total) {
+      return true;
+    }
+
+    const size_t size_tosend = _size_total - _size_written;
+    const uint8_t * const buffer = _buffer + _size_written;
+    const ssize_t size_write = write(fd(), buffer, size_tosend);
+
+    if (size_write < 0) {
+      if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+	return false;
+      }
+      else {
+	throw std::runtime_error("FDRecvTask failed");
+      }
+    }
+    else if (size_write == 0) {
+      throw std::runtime_error("fd closed");
+    }
+    else {
+      _size_written += size_write;
+    }
+
+    return _size_written == _size_total;
+  }
+
+  /////
+  //
+  // pgl::Group::HeaderRecvTask method definitions
+  //
+  /////
+
+  Group::HeaderRecvTask::HeaderRecvTask(int fd)
+    : Group::FDRecvTask(fd, &_header, sizeof(Message::Header))
+  {
+  }
+
+  bool Group::HeaderRecvTask::process(Group& group)
+  {
+    //
+    // TODO: check sender pid
+    // TODO: check size limits
+    //
+    std::shared_ptr<FDTask> task = std::make_shared<MessageRecvTask>(fd(), _header);
+
+    if (!task->run(group)) {
+      group.masterAddReadTask(task);
+    }
+
+    return true;
+  }
+
+  /////
+  //
+  // pgl::Group::MessageRecvTask method definitions
+  //
+  /////
+
+  Group::MessageRecvTask::MessageRecvTask(int fd, const Message::Header& header)
+    : Group::FDRecvTask(fd),
+      _msg(header)
+  {
+    setReceiveBuffer(_msg.dataWritable());
+    setReceiveSize(_msg.dataSize());
+  }
+
+  bool Group::MessageRecvTask::process(Group& group)
+  {
+    group.masterHandleBusMessage(_msg, fd());
+    return true;
+  }
+
+  /////
+  //
+  // pgl::Group::MessageSendTask method definitions
+  //
+  /////
+
+  Group::MessageSendTask::MessageSendTask(int fd, Message& msg)
+    : Group::FDSendTask(fd),
+      _msg(std::move(msg))
+  {
+    setSendBuffer(_msg.buffer());
+    setSendSize(_msg.bufferSize());
+  }
+
 } /* namespace pgl */
