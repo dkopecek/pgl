@@ -55,7 +55,7 @@ pid_t messageBusResolve(const std::string& name);
 
 ### Group
 
-Defining the group object is done by instantiating the pgl::Group class inside the standard main function and registering your `pgl::Process` sub-classes in the instance using the `addProcess<typename T>(const std::string& name);` method of the `pgl::Group` class:
+Defining the group is done by instantiating the `pgl::Group` class inside the standard main function and registering your `pgl::Process` sub-classes in the instance using the `addProcess<typename T>(const std::string& name);` method of the `pgl::Group` class:
 
 ```c++
 int main(int argc, char *argv[])
@@ -65,12 +65,12 @@ int main(int argc, char *argv[])
     group.addProcess<MyProcess>("MyProcess1");
     group.addProcess<MyProcess>("MyProcess2");
     
-    return run.group();
+    return group.run();
 }
 ```
 
 The `pgl::Group` constructor takes the original `argc` and `argv` values. When a member process is spawned, these values are forwarded to its `main()` function.
 
-After we are done registering processes, we can start the process group by calling the `run()` method of the `pgl::Group` class. The function returns only after all member of the group are cease to exist on the system. The return value of the function should be used as the return value of the standard `main()` function as it indicates whether the group terminated successfully or not.
+After we are done registering processes, we can start the process group by calling the `run()` method of the `pgl::Group` class. The function returns only after all member of the group cease to exist on the system. The return value of the function should be used as the return value of the standard `main()` function as it indicates whether the group terminated successfully or not.
 
-Sources of several demo applications that show how to use the API are located in the src/Examples/ sub-directory in the repository. The [minprivs](src/Examples/minprivs.cpp) demo application shows how to drop all kinds of priviledges and access to OS resources while still be able to use the API. That application assumes that it'll be started under the *root* user.
+Sources of several demo applications that show how to use the API are located in the [src/Examples/](src/Examples) sub-directory in the repository. The [minprivs](src/Examples/minprivs.cpp) demo application shows how to drop all kinds of priviledges and access to OS resources while still be able to use the API. That application assumes that it'll be started under the *root* user.
