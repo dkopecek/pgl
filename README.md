@@ -53,6 +53,13 @@ pid_t messageBusResolve(const std::string& name);
 * __messageBusResolve__.
   Resolve a string identifier of a member of the group to the PID of a running process with that identifier. If there's no active process with such a name, `-1` is returned.
 
+```c++
+int messageBusWait(unsigned int max_wait_usec = 0);
+```
+
+* __messageBusWait__.
+  Wait for a message. The `max_wait_usec` parameter specifies how long, in microseconds, to wait for a message to appear on the bus. If set to 0, the call will block until a message is available or until the wait is interrupted by an external event (e.g. signal). If a message is available, 1 is returned. On interruption, -1 is returned. If `max_wait_usec` is non-zero and the timeout expired, 0 is returned.
+
 ### Group
 
 Defining the group is done by instantiating the `pgl::Group` class inside the standard main function and registering your `pgl::Process` sub-classes in the instance using the `addProcess<typename T>(const std::string& name);` method of the `pgl::Group` class:
