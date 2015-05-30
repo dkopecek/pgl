@@ -62,6 +62,8 @@ namespace pgl
     void setMessageBusFDs(int rfd, int wfd);
     void getMessageBusFDs(int *rfd_ptr, int *wfd_ptr);
 
+    void setCloseAllFDs(unsigned int from_fd);
+
     /*
      * Method called right before calling exec(3)
      * to start the process from it's master/parent
@@ -150,6 +152,7 @@ namespace pgl
     static uint64_t tsMicrosecDiff(const struct timespec& ts_a, const struct timespec& ts_b);
     static void messageBusWrite(int fd, const uint8_t *data, size_t size, unsigned int max_delay_usec);
     static void messageBusRead(int fd, uint8_t *data, size_t size, unsigned int max_delay_usec);
+    static void closeAllFDs(int from_fd);
 
     void terminate(int signal);
     uint8_t expectedMessageHashBytePosition();
@@ -174,5 +177,7 @@ namespace pgl
 
     std::default_random_engine _rng_hashbyte;
     std::uniform_int_distribution<uint8_t> _rnd_hashbyte;
+
+    unsigned int _closeall_fds;
   };
 } /* namespace pgl */

@@ -20,6 +20,8 @@
 #include "Message.hpp"
 #include <sys/prctl.h>
 #include <sys/select.h>
+#include <sys/time.h>
+#include <sys/resource.h>
 #include <fcntl.h>
 
 namespace pgl
@@ -31,6 +33,7 @@ namespace pgl
     _bus_rfd = -1;
     _state = Process::State::Initialized;
     _keep_env = { "SSH_AUTH_SOCK", "GPG_AGENT_INFO" };
+    _closeall_fds = 1;
   }
 
   Process::~Process()
@@ -314,6 +317,10 @@ namespace pgl
 	throw std::runtime_error("BUG: invalid environment");
       }
 
+      if (_closeall_fds > 0) {
+	closeAllFDs(/*from_fd=*/3 + _closeall_fds);
+      }
+
       preExecSetup();
       ::execvpe(_exec_path.c_str(), argv, exec_env);
       throw std::system_error(errno, std::system_category());
@@ -487,6 +494,22 @@ namespace pgl
 	data += size_read;
       }
     } /* while loop */
+
+    return;
+  }
+
+  void Process::closeAllFDs(int from_fd)
+  { 
+    int fd_max = 1024;
+    struct rlimit limit;
+
+    if (getrlimit(RLIMIT_NOFILE, &limit) == 0) {
+      fd_max = limit.rlim_cur - 1;
+    }
+
+    for (int fd = from_fd; fd <= fd_max; ++fd) {
+      close(fd);
+    }
 
     return;
   }
