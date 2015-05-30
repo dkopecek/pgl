@@ -1,5 +1,9 @@
 ACLOCAL_AMFLAGS= -I m4
 
+EXTRA_DIST=\
+	README.md \
+	LICENSE
+
 AM_CPPFLAGS=\
 	-I$(top_srcdir)/src
 
