@@ -18,8 +18,10 @@
 //
 #include "Group.hpp"
 #include "Process.hpp"
+#include "Utility.hpp"
 #include <sys/signalfd.h>
 #include <assert.h>
+#include <time.h>
 
 namespace pgl
 {
@@ -389,7 +391,12 @@ namespace pgl
   Group::FDTask::FDTask(const int fd)
     : _fd(fd)
   {
-    /* Empty */
+    _ts_created.tv_sec = 0;
+    _ts_created.tv_nsec = 0;
+
+    if (clock_gettime(CLOCK_MONOTONIC, &_ts_created) != 0) {
+      throw std::runtime_error("clock_gettime failed");
+    }
   }
 
   bool Group::FDTask::operator==(const Group::FDTask& rhs) const
@@ -412,6 +419,20 @@ namespace pgl
     return _fd;
   }
 
+  uint64_t Group::FDTask::currentAgeMicrosec() const
+  {
+    struct timespec ts_now;
+
+    ts_now.tv_sec = 0;
+    ts_now.tv_nsec = 0;
+
+    if (clock_gettime(CLOCK_MONOTONIC, &ts_now) != 0) {
+      throw std::runtime_error("clock_gettime failed");
+    }
+
+    return tsMicrosecDiff(ts_now, _ts_created);
+  }
+
   /////
   //
   // pgl::Group::FDRecvTask method definitions
@@ -424,6 +445,7 @@ namespace pgl
     _size_received = 0;
     _size_total = recv_size;
     _buffer = reinterpret_cast<uint8_t*>(recv_buffer);
+    _max_duration_usec = 0;
   }
 
   bool Group::FDRecvTask::run(Group& group)
@@ -450,6 +472,10 @@ namespace pgl
   {
     if (_size_received == _size_total) {
       return true;
+    }
+    if (_max_duration_usec != 0
+	&& currentAgeMicrosec() > _max_duration_usec) {
+      throw std::runtime_error("recv timeout");
     }
 
     const size_t size_toread = _size_total - _size_received;
@@ -486,6 +512,7 @@ namespace pgl
     _size_written = 0;
     _size_total = send_size;
     _buffer = reinterpret_cast<const uint8_t*>(send_buffer);
+    _max_duration_usec = 0;
   }
 
   bool Group::FDSendTask::run(Group& group)
@@ -514,6 +541,10 @@ namespace pgl
   {
     if (_size_written == _size_total) {
       return true;
+    }
+    if (_max_duration_usec != 0
+	&& currentAgeMicrosec() > _max_duration_usec) {
+      throw std::runtime_error("send timeout");
     }
 
     const size_t size_tosend = _size_total - _size_written;

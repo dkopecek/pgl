@@ -18,6 +18,7 @@
 //
 #include "Process.hpp"
 #include "Message.hpp"
+#include "Utility.hpp"
 #include <sys/prctl.h>
 #include <sys/select.h>
 #include <sys/time.h>
@@ -388,15 +389,6 @@ namespace pgl
   void Process::kill()
   {
     terminate(SIGKILL);
-  }
-
-  uint64_t Process::tsMicrosecDiff(const struct timespec& ts_a, const struct timespec& ts_b)
-  {
-    const uint64_t ns_abs_a = ts_a.tv_sec * 1000 * 1000 * 1000 + ts_a.tv_nsec;
-    const uint64_t ns_abs_b = ts_b.tv_sec * 1000 * 1000 * 1000 + ts_b.tv_nsec;
-    const uint64_t ns_diff = (ns_abs_a > ns_abs_b ?
-			      ns_abs_a - ns_abs_b : ns_abs_b - ns_abs_a);
-    return ns_diff / 1000;
   }
 
   void Process::messageBusWrite(int fd, const uint8_t *data, size_t size, unsigned int max_delay_usec)

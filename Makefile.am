@@ -30,7 +30,9 @@ libpgl_la_SOURCES=\
 	src/Library/Process.hpp \
 	src/Library/Process.cpp \
 	src/Library/Message.hpp \
-	src/Library/Message.cpp
+	src/Library/Message.cpp \
+	src/Library/Utility.hpp \
+	src/Library/Utility.cpp
 
 pkginclude_HEADERS=\
 	src/Library/Group.hpp \

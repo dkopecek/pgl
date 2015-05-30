@@ -149,7 +149,6 @@ namespace pgl
 
     static const std::string pathBasename(const std::string& path);
   protected:
-    static uint64_t tsMicrosecDiff(const struct timespec& ts_a, const struct timespec& ts_b);
     static void messageBusWrite(int fd, const uint8_t *data, size_t size, unsigned int max_delay_usec);
     static void messageBusRead(int fd, uint8_t *data, size_t size, unsigned int max_delay_usec);
     static void closeAllFDs(int from_fd);

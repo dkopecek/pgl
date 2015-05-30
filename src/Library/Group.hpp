@@ -81,11 +81,13 @@ namespace pgl
       bool operator<(const FDTask& rhs) const;
       bool operator>(const FDTask& rhs) const;
       int fd() const;
+      uint64_t currentAgeMicrosec() const;
 
       virtual bool run(Group& group) = 0;
 
     private:
       const int _fd;
+      struct timespec _ts_created;
     };
 
     class FDRecvTask : public FDTask
@@ -105,6 +107,7 @@ namespace pgl
       size_t _size_total;
       size_t _size_received;
       uint8_t *_buffer;
+      uint64_t _max_duration_usec;
     };
 
     class FDSendTask : public FDTask
@@ -123,6 +126,7 @@ namespace pgl
       size_t _size_total;
       size_t _size_written;
       const uint8_t *_buffer;
+      uint64_t _max_duration_usec;
     };
 
     class HeaderRecvTask : public FDRecvTask
