@@ -32,6 +32,12 @@ libpgl_la_SOURCES=\
 	src/Library/Message.hpp \
 	src/Library/Message.cpp
 
+pkginclude_HEADERS=\
+	src/Library/Group.hpp \
+	src/Library/Process.hpp \
+	src/Library/Message.hpp \
+	src/Library/pgl.hpp
+
 bin_PROGRAMS=\
 	test \
 	minprivs
