@@ -1,0 +1,12 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@/pgl
+
+Name: libpgl
+Description: A C++ library that provides an API which simplifies the task of process isolation implementation
+URL: https://github.com/dkopecek/pgl
+Version: @VERSION@
+Requires: libsodium
+Libs: -L${libdir} -lpgl
+Cflags: -I${includedir}

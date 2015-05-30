@@ -89,5 +89,5 @@ else
    AC_DEFINE([NDEBUG], [1], [Debug build disabled])
 fi
 
-AC_CONFIG_FILES([Makefile])
+AC_CONFIG_FILES([Makefile libpgl.pc])
 AC_OUTPUT

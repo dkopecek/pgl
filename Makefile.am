@@ -3,6 +3,9 @@ ACLOCAL_AMFLAGS= -I m4
 AM_CPPFLAGS=\
 	-I$(top_srcdir)/src
 
+pkgconfigdir = $(libdir)/pkgconfig
+pkgconfig_DATA = libpgl.pc
+
 lib_LTLIBRARIES=\
 	libpgl.la
 
