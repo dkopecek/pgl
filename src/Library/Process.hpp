@@ -151,7 +151,6 @@ namespace pgl
   protected:
     static void messageBusWrite(int fd, const uint8_t *data, size_t size, unsigned int max_delay_usec);
     static void messageBusRead(int fd, uint8_t *data, size_t size, unsigned int max_delay_usec);
-    static void closeAllFDs(int from_fd);
 
     void terminate(int signal);
     uint8_t expectedMessageHashBytePosition();

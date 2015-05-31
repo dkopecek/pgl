@@ -21,8 +21,6 @@
 #include "Utility.hpp"
 #include <sys/prctl.h>
 #include <sys/select.h>
-#include <sys/time.h>
-#include <sys/resource.h>
 #include <fcntl.h>
 
 namespace pgl
@@ -486,22 +484,6 @@ namespace pgl
 	data += size_read;
       }
     } /* while loop */
-
-    return;
-  }
-
-  void Process::closeAllFDs(int from_fd)
-  { 
-    int fd_max = 1024;
-    struct rlimit limit;
-
-    if (getrlimit(RLIMIT_NOFILE, &limit) == 0) {
-      fd_max = limit.rlim_cur - 1;
-    }
-
-    for (int fd = from_fd; fd <= fd_max; ++fd) {
-      close(fd);
-    }
 
     return;
   }
