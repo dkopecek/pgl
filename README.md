@@ -14,7 +14,7 @@ The library is in early stages. It's development was triggered by a need to sepa
 
 With current API, it's possible to define a group of processes, start them and use API functions to send and receive unstructured messages to any member of the group.
 
-### Process
+### pgl::Process
 
 A process is implemented as a subclass of the API-provided class, `pgl::Process`. In your subclass, you have to implement a method with type signature equal to that of a standard process entry-point function, `int main(int argc, char *argv[])`:
 
@@ -60,7 +60,7 @@ int messageBusWait(unsigned int max_wait_usec = 0);
 * __messageBusWait__.
   Wait for a message. The `max_wait_usec` parameter specifies how long, in microseconds, to wait for a message to appear on the bus. If set to 0, the call will block until a message is available or until the wait is interrupted by an external event (e.g. signal). If a message is available, 1 is returned. On interruption, -1 is returned. If `max_wait_usec` is non-zero and the timeout expired, 0 is returned.
 
-### Group
+### pgl::Group
 
 Defining the group is done by instantiating the `pgl::Group` class inside the standard main function and registering your `pgl::Process` sub-classes in the instance using the `addProcess<typename T>(const std::string& name);` method of the `pgl::Group` class:
 
