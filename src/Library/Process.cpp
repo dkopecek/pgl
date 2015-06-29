@@ -21,6 +21,7 @@
 #include "Utility.hpp"
 #include <sys/prctl.h>
 #include <sys/select.h>
+#include <sys/time.h>
 #include <fcntl.h>
 
 namespace pgl
@@ -206,10 +207,21 @@ namespace pgl
 
     msg.finalize();
 
+    /*
+     * Write the message data to the bus.
+     */
     const uint8_t *buffer = msg.buffer();
     const size_t buffer_size = msg.bufferSize();
 
     messageBusWrite(_bus_wfd, buffer, buffer_size, 30 * 1000 * 1000);
+    /*
+     * If it's a M2M_FD message, we have to send the
+     * fd using sendmsg.
+     */
+    if (msg.getType() == Message::M2M_FD) {
+      messageBusSendFD(_bus_wfd, msg.fd(), 3 * 1000 * 1000);
+    }
+
     return;
   }
 
@@ -229,6 +241,15 @@ namespace pgl
     /* Check reply_header.size value */
     Message msg(header);
     messageBusRead(_bus_rfd, msg.dataWritable(), msg.dataSize(), 30 * 1000 * 1000);
+
+    /*
+     * Problem: cannot trust the data until validated
+     * but cannot validate until the fd is received.
+     */
+    if (msg.getType() == Message::Type::M2M_FD) {
+      const int fd = messageBusReadFD(_bus_rfd, 3 * 1000 * 1000);
+      msg.setFD(fd);
+    }
 
     /* Check sanity of the whole message */
     msg.validate();
@@ -486,6 +507,95 @@ namespace pgl
     } /* while loop */
 
     return;
+  }
+
+  static const uint8_t zero_byte = 0;
+
+  void Process::messageBusSendFD(int bus_fd, int fd, unsigned int max_delay_usec)
+  {
+    /* Intialize the message header structure */
+    struct msghdr hdr;
+    memset(&hdr, 0, sizeof hdr);
+
+    /* Setup the control message data with the fd */
+    uint8_t cmsg_data[CMSG_SPACE(sizeof(int))];
+
+    hdr.msg_control = cmsg_data; // <===
+    hdr.msg_controllen = sizeof cmsg_data; /// <=== THIS WAS MISSING
+
+    struct cmsg_hdr *cmsg = CMSG_FIRSTHDR(&hdr);
+    cmsg->cmsg_len = CMSG_LEN(sizeof(int));
+    cmsg->cmsg_level = SOL_SOCKET;
+    cmsg->cmsg_type = SCM_RIGHTS;
+    memcpy(CMSG_DATA(cmsg), &fd, sizeof(int));
+
+    /* Setup the message header */
+    struct iovec iov = { &zero_byte, sizeof zero_byte };
+    hdr.msg_iov = &iov;
+    hdr.msg_iovlen = 1;
+    hdr.msg_control = cmsg_data;
+    hdr.msg_controllen = cmsg->cmsg_len;
+
+    /* Loop until sent or timeout */
+    while(true) {
+      const ssize_t ret = sendmsg(bus_fd, &hdr, 0);
+
+      if (ret != -1) {
+	/* The message was successfully sent */
+	break;
+      }
+      else {
+	/*
+	 * An error happend, no data was sent. If the error is only
+	 * a temporary one and there's still time left, we try again.
+	 */
+	if (errno == EAGAIN ||
+	    errno == EWOULDBLOCK) {
+	  /* Wa have to try again if there's still time */
+	  continue;
+	}
+	else {
+	  throw std::runtime_error("Cannot send file descriptor to the bus");
+	}
+      }
+    }
+
+    return;
+  }
+
+  int Process::messageBusReadFD(int bus_fd, unsigned int max_delay_usec)
+  {
+    struct msghdr hdr;
+    memset(&hdr, 0, sizeof hdr);
+
+    uint8_t cmsg_data[CMSG_SPACE(sizeof(int))];
+    memset(&cmsg_data, 0, sizeof cmsg_data);
+
+    hdr.cmsg_control = cmsg_data;
+    hdr.cmsg_controllen = sizeof cmsg_data;
+
+    while(true) {
+      const ssize_t ret = recvmsg(bus_fd, &hdr, 0);
+      if (ret != -1) {
+	break;
+      }
+    }
+
+    const struct cmsghdr *cmsg = CMSG_FIRSTHDR(&hdr);
+
+    if (cmsg == nullptr) {
+      throw std::runtime_error("Expected to receive control data in the message");
+    }
+    if (cmsg->cmsg_type != SCM_RIGHTS) {
+      throw std::runtime_error("Invalid control data type");
+    }
+
+    /* XXX: check cmsg data length */
+
+    int fd = -1;
+    memcpy(&fd, CMSG_DATA(cmsg), sizeof fd);
+
+    return fd;
   }
 
   void Process::terminate(int signal)

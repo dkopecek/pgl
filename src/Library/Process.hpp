@@ -62,7 +62,19 @@ namespace pgl
     void setMessageBusFDs(int rfd, int wfd);
     void getMessageBusFDs(int *rfd_ptr, int *wfd_ptr);
 
+    //void setMessageBusSendTimeout(unsigned int usec);
+    //void setMessageBusRecvTimeout(unsigned int usec);
+
     void setCloseAllFDs(unsigned int from_fd);
+
+    //void setRunAsUser();
+    //void setRunAsGroup();
+    //void setChroot();
+    //void setLinuxCapabilities();
+    //void setLinuxSeccompFilter(void *scmp_filter_ctx_ptr);
+    //void setResourceLimit();
+    //void setMessageBusSizeLimit(size_t bytes_max);
+    //void setMLockedMemory(size_t bytes_max); /**< alloc+mlock+setrlimit */
 
     /*
      * Method called right before calling exec(3)
@@ -116,6 +128,9 @@ namespace pgl
      */
     pid_t messageBusRecv(pid_t peer_pid, std::string& message);
 
+    //void messageBusSend(pid_t peer_pid, const std::string& message, int fd);
+    //pid_t messageBusRecv(pid_t peer_pid, Message& msg);
+
     /**/
     pid_t messageBusSendRecv(pid_t peer_pid, const std::string& message, std::string& reply);
 
@@ -151,6 +166,8 @@ namespace pgl
   protected:
     static void messageBusWrite(int fd, const uint8_t *data, size_t size, unsigned int max_delay_usec);
     static void messageBusRead(int fd, uint8_t *data, size_t size, unsigned int max_delay_usec);
+    static void messageBusSendFD(int bus_fd, int fd, unsigned int max_delay_usec);
+    static int messageBusReadFD(int bus_fd, unsigned int max_delay_usec);
 
     void terminate(int signal);
     uint8_t expectedMessageHashBytePosition();

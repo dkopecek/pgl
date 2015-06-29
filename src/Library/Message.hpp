@@ -33,6 +33,7 @@ namespace pgl
   public:
     enum Type {
       M2M,
+      M2M_FD,
       BUS_PID_LOOKUP, /**< member request to resolve a process name to it's current pid */
       BUS_PID_FORGET, /**< member request to forget that it asked about a pid */
       BUS_HEARTBEAT /**< member heartbeat */
@@ -149,6 +150,7 @@ namespace pgl
     Header *_header_ptr; /**< Pointer to the message header */
     void *_data_ptr; /**< Pointer to the data part of the message */
     size_t _data_size; /**< Size of the data part of the message */
-    bool _finalized;
+    int _fd; /**< Send this file descriptor along with the message, if it doesn't equal -1 */
+    bool _finalized; /**< Indicator of the state of hash byte value computation or verification */
   };
 } /* namespace pgl */
