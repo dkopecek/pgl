@@ -34,4 +34,7 @@ namespace pgl
    */
   uint64_t tsMicrosecDiff(const struct timespec& ts_a, const struct timespec& ts_b);
 
+  int writeFD(int bus_fd, int fd, unsigned int max_delay_usec);
+  int readFD(int bus_fd, unsigned int max_delay_usec);
+
 } /* namespace pgl */

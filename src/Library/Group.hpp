@@ -97,17 +97,23 @@ namespace pgl
       bool run(Group& group) final;
       void setReceiveBuffer(void *buffer);
       void setReceiveSize(size_t size);
+      void setReceiveFD();
+      int getFD() const;
 
       virtual bool process(Group& group) = 0;
 
     protected:
       bool receive();
+      bool receiveData();
+      bool receiveFD();
 
     private:
       size_t _size_total;
       size_t _size_received;
       uint8_t *_buffer;
       uint64_t _max_duration_usec;
+      int _fd;
+      bool _receive_fd;
     };
 
     class FDSendTask : public FDTask
@@ -117,16 +123,21 @@ namespace pgl
       bool run(Group& group) final;
       void setSendBuffer(const void *buffer);
       void setSendSize(size_t size);
+      void setSendFD(int fd);
       bool inProgress() const;
 
     protected:
       bool send();
+      bool sendData();
+      bool sendFD();
 
     private:
       size_t _size_total;
       size_t _size_written;
       const uint8_t *_buffer;
       uint64_t _max_duration_usec;
+      int _fd;
+      bool _send_fd;
     };
 
     class HeaderRecvTask : public FDRecvTask

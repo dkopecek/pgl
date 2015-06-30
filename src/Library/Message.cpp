@@ -21,6 +21,11 @@
 
 namespace pgl
 {
+  Message::Message()
+  {
+    destroy();
+  }
+
   Message::Message(size_t data_size)
     : _buffer_size(sizeof(Message::Header) + data_size),
       _data_size(data_size)
@@ -41,6 +46,7 @@ namespace pgl
     memset(_data_ptr, 0, _data_size);
 
     _finalized = false;
+    _fd = -1;
     return;
   }
 
@@ -55,6 +61,7 @@ namespace pgl
     *_header_ptr = header;
     memset(_data_ptr, 0, _data_size);
     _finalized = false;
+    _fd = -1;
     return;
   }
 
@@ -67,6 +74,8 @@ namespace pgl
       _header_ptr = rhs._header_ptr;
       _data_ptr = rhs._data_ptr;
       _finalized = rhs._finalized;
+      _fd = rhs._fd;
+      rhs.destroy();
     }
     return *this;
   }
@@ -75,24 +84,52 @@ namespace pgl
     : _buffer_size(rhs._buffer_size),
       _data_size(rhs._data_size)
   {
-    _buffer = std::move(rhs._buffer);
-    _header_ptr = rhs._header_ptr;
-    _data_ptr = rhs._data_ptr;
-    _finalized = rhs._finalized;
+    if (this != &rhs) {
+      _buffer = std::move(rhs._buffer);
+      _header_ptr = rhs._header_ptr;
+      _data_ptr = rhs._data_ptr;
+      _finalized = rhs._finalized;
+      _fd = rhs._fd;
+      rhs.destroy();
+    }
     return;
   }
 
   Message::~Message()
   {
     _buffer = nullptr;
+    destroy();
+  }
+
+  void Message::destructiveCopy(Message& rhs)
+  {
+    if (this != &rhs) {
+      _buffer_size = rhs._buffer_size;
+      _data_size = rhs._data_size;
+      _buffer = std::move(rhs._buffer);
+      _header_ptr = rhs._header_ptr;
+      _data_ptr = rhs._data_ptr;
+      _finalized = rhs._finalized;
+      _fd = rhs._fd;
+      rhs.destroy();
+    }
+  }
+
+  void Message::destroy()
+  {
+    _buffer_size = 0;
     _header_ptr = nullptr;
     _data_ptr = nullptr;
+    _data_size = 0;
+    _fd = -1;
+    _finalized = false;
+    _buffer.release();
   }
 
   void Message::setFrom(pid_t pid)
   {
     if (_finalized) {
-      throw std::runtime_error("Cannot modify finalized message");
+      throw std::runtime_error("setFrom: cannot modify finalized message");
     }
     _header_ptr->pid_from = pid;
     return;
@@ -101,7 +138,7 @@ namespace pgl
   pid_t Message::getFrom() const
   {
     if (!_finalized) {
-      throw std::runtime_error("Cannot read from an incomplete message");
+      throw std::runtime_error("getFrom: cannot read from an incomplete message");
     }
     return _header_ptr->pid_from;
   }
@@ -109,7 +146,7 @@ namespace pgl
   void Message::setTo(pid_t pid)
   {
     if (_finalized) {
-      throw std::runtime_error("Cannot modify finalized message");
+      throw std::runtime_error("setTo: cannot modify finalized message");
     }
     _header_ptr->pid_to = pid;
     return;
@@ -118,7 +155,7 @@ namespace pgl
   pid_t Message::getTo() const
   {
     if (!_finalized) {
-      throw std::runtime_error("Cannot read from an incomplete message");
+      throw std::runtime_error("getTo: cannot read from an incomplete message");
     }
     return _header_ptr->pid_to;
   }
@@ -126,7 +163,7 @@ namespace pgl
   void Message::setType(Type type)
   {
     if (_finalized) {
-      throw std::runtime_error("Cannot modify finalized message");
+      throw std::runtime_error("setType: cannot modify finalized message");
     }
     _header_ptr->type = type;
     return;
@@ -135,7 +172,7 @@ namespace pgl
   Message::Type Message::getType() const
   {
     if (!_finalized) {
-      throw std::runtime_error("Cannot read from an incomplete message");
+      throw std::runtime_error("getType: cannot read from an incomplete message");
     }
     return getTypeUnsafe();
   }
@@ -147,9 +184,15 @@ namespace pgl
   
   void Message::setFD(int fd)
   {
-    if (!_finalized) {
-      throw std::runtime_error("Cannot modify finalized message");
+    if (_finalized) {
+      throw std::runtime_error("setFD: cannot modify finalized message");
     }
+    setFDUnsafe(fd);
+    return;
+  }
+
+  void Message::setFDUnsafe(int fd)
+  {
     _fd = fd;
     return;
   }
@@ -157,7 +200,7 @@ namespace pgl
   int Message::getFD() const
   {
     if (!_finalized) {
-      throw std::runtime_error("Cannot read from an incomplete message");
+      throw std::runtime_error("getFD: cannot read from an incomplete message");
     }
     return _fd;
   }
@@ -181,19 +224,19 @@ namespace pgl
   void Message::copyToData(const std::string& strval)
   {
     if (_finalized) {
-      throw std::runtime_error("Cannot modify finalized message");
+      throw std::runtime_error("copyToData: cannot modify finalized message");
     }
 
     const size_t size = strval.size();
 
     if (size != _header_ptr->size) {
-      throw std::runtime_error("size mismatch");
+      throw std::runtime_error("copyToData: size mismatch");
     }
 
     const void *ptr = reinterpret_cast<const void *>(strval.c_str());
 
     if (ptr == nullptr) {
-      throw std::runtime_error("invalid string");
+      throw std::runtime_error("copyToData: invalid string");
     }
 
     copyToData(ptr, size);
@@ -203,7 +246,7 @@ namespace pgl
   void Message::copyFromData(std::string& strval) const
   {
     if (!_finalized) {
-      throw std::runtime_error("Cannot copy data from an incomplete message");
+      throw std::runtime_error("copyFromData: cannot copy data from an incomplete message");
     }
     const char *ptr = static_cast<const char *>(_data_ptr);
     strval.assign(ptr, _header_ptr->size);
@@ -213,13 +256,13 @@ namespace pgl
   void Message::copyToData(const void *ptr, size_t size)
   {
     if (_finalized) {
-      throw std::runtime_error("Cannot modify finalized message");
+      throw std::runtime_error("copyToData: cannot modify finalized message");
     }
     if (ptr == nullptr) {
-      throw std::runtime_error("invalid arguments");
+      throw std::runtime_error("copyToData: invalid arguments");
     }
     if (size != _header_ptr->size) {
-      throw std::runtime_error("size mismatch");
+      throw std::runtime_error("copyToData: size mismatch");
     }
     memcpy(_data_ptr, ptr, size);
     return;
@@ -228,13 +271,13 @@ namespace pgl
   void Message::copyFromData(void *ptr, size_t size) const
   {
     if (!_finalized) {
-      throw std::runtime_error("Cannot copy data from an incomplete message");
+      throw std::runtime_error("copyFromData: cannot copy data from an incomplete message");
     }
     if (ptr == nullptr) {
-      throw std::runtime_error("invalid arguments");
+      throw std::runtime_error("copyFromData: invalid arguments");
     }
     if (size != _header_ptr->size) {
-      throw std::runtime_error("size mismatch");
+      throw std::runtime_error("copyFromDat: size mismatch");
     }
     memcpy(ptr, _data_ptr, size);
     return;

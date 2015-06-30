@@ -2,6 +2,9 @@
 #include <unistd.h>
 #include <cstdint>
 #include <fstream>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include "Group.hpp"
 
 /*
@@ -21,7 +24,12 @@ public:
       std::string message;
       const pid_t peer_pid = messageBusRecv(-1, message);
       /* open fd */
-      const int fd = open(message.c_str(), O_WRONLY);
+      const int fd = open(message.c_str(), O_WRONLY|O_CREAT);
+
+      if (fd == -1) {
+	abort();
+      }
+
       /* send fd */
       messageBusSendFD(peer_pid, fd, message);
     }
@@ -43,8 +51,8 @@ public:
 
     /* request fd */
     messageBusSend(open_pid, "/tmp/test.log");
-    messageBusRecvFD(open_pid, &fd);
-    
+    while(messageBusRecvFD(open_pid, &fd) == -1);
+
     for (;;) {
       /* wait for a message */
       if (messageBusWait() != 1) {

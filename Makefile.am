@@ -42,7 +42,8 @@ pkginclude_HEADERS=\
 
 bin_PROGRAMS=\
 	test \
-	minprivs
+	minprivs \
+	fd-send-recv
 
 test_SOURCES=\
 	src/Examples/test.cpp
@@ -62,3 +63,12 @@ minprivs_CPPFLAGS=\
 minprivs_LDADD=\
 	$(top_builddir)/libpgl.la \
 	-lseccomp -lcap-ng
+
+fd_send_recv_SOURCES=\
+	src/Examples/fd-send-recv.cpp
+
+fd_send_recv_CPPFLAGS=\
+	-I$(top_srcdir)/src/Library
+
+fd_send_recv_LDADD=\
+	$(top_builddir)/libpgl.la

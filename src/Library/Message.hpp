@@ -50,6 +50,7 @@ namespace pgl
       uint8_t data[0]; /**< Pointer to the data part of the message */
     };
 
+    Message();
     Message(size_t data_size);
     Message(const Header& header);
     Message(Message&& rhs);
@@ -58,6 +59,8 @@ namespace pgl
     Message& operator=(const Message&) = delete;
     ~Message();
 
+    void destructiveCopy(Message& rhs);
+    void destroy();
     void setFrom(pid_t pid);
     pid_t getFrom() const;
     void setTo(pid_t pid);
@@ -65,6 +68,7 @@ namespace pgl
     void setType(Type type);
     Type getType() const;
     void setFD(int fd);
+    void setFDUnsafe(int fd);
     int getFD() const;
     void finalize();
     void validate();
@@ -82,7 +86,7 @@ namespace pgl
       const size_t size = sizeof(T);
 
       if (size != _header_ptr->size) {
-	throw std::runtime_error("size mismatch");
+	throw std::runtime_error("copyToData: size mismatch");
       }
 
       const void *ptr = static_cast<const void *>(&copyable);
@@ -101,7 +105,7 @@ namespace pgl
       const size_t size = sizeof(T);
 
       if (size != _header_ptr->size) {
-	throw std::runtime_error("size mismatch");
+	throw std::runtime_error("copyFromData: size mismatch");
       }
 
       void *ptr = static_cast<void *>(&copyable);
@@ -116,7 +120,7 @@ namespace pgl
     const uint8_t *buffer() const
     {
       if (!_finalized) {
-	throw std::runtime_error("Cannot access message buffer of an incomplete message");
+	throw std::runtime_error("buffer: cannot access message buffer of an incomplete message");
       }
       return _buffer.get();
     }

@@ -22,6 +22,8 @@
 #include <string>
 #include <mutex>
 #include <random>
+#include <queue>
+#include <atomic>
 #include <system_error>
 #include <cstdint>
 #include <stddef.h>
@@ -128,9 +130,9 @@ namespace pgl
      */
     pid_t messageBusRecv(pid_t peer_pid, std::string& message);
 
-    void messageBusSendFD(pid_t peer_pid, int fd, const std::string& message = std::string());
+    void messageBusSendFD(pid_t peer_pid, int fd, const std::string& message = "");
 
-    void messageBusRecvFD(pid_t peer_pid, int *fd, std::string *message = nullptr);
+    pid_t messageBusRecvFD(pid_t peer_pid, int *fd, std::string *message = nullptr);
 
     /**/
     pid_t messageBusSendRecv(pid_t peer_pid, const std::string& message, std::string& reply);
@@ -167,13 +169,18 @@ namespace pgl
   protected:
     static void messageBusWrite(int fd, const uint8_t *data, size_t size, unsigned int max_delay_usec);
     static void messageBusRead(int fd, uint8_t *data, size_t size, unsigned int max_delay_usec);
-    static void messageBusSendFD(int bus_fd, int fd, unsigned int max_delay_usec);
+    static void messageBusWriteFD(int bus_fd, int fd, unsigned int max_delay_usec);
     static int messageBusReadFD(int bus_fd, unsigned int max_delay_usec);
 
     void terminate(int signal);
     uint8_t expectedMessageHashBytePosition();
     uint8_t messageHashByteAt(size_t pos, const Message::Header* header, const uint8_t *data, size_t size);
     void prepareMemberEnvVariables(char **& env_array);
+
+    void messageBusRecvEnqueue(Message&& msg);
+    Message messageBusRecvDequeue(bool lock_bus);
+    bool messageBusRecvQueued() const;
+
   private:
     std::string _name;
     std::string _exec_path;
@@ -188,6 +195,9 @@ namespace pgl
   
     std::mutex _bus_rfd_mutex;
     int _bus_rfd;
+
+    std::queue<Message> _bus_recv_queue;
+    std::atomic<bool> _bus_recv_queued;
 
     State _state;
 

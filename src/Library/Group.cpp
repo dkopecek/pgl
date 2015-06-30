@@ -335,6 +335,7 @@ namespace pgl
     switch(msg.getType())
       {
       case Message::Type::M2M:
+      case Message::Type::M2M_FD:
 	masterRouteMessage(msg);
 	break;
       case Message::Type::BUS_PID_LOOKUP:
@@ -446,6 +447,8 @@ namespace pgl
     _size_total = recv_size;
     _buffer = reinterpret_cast<uint8_t*>(recv_buffer);
     _max_duration_usec = 0;
+    _fd = -1;
+    _receive_fd = false;
   }
 
   bool Group::FDRecvTask::run(Group& group)
@@ -468,14 +471,29 @@ namespace pgl
     return;
   }
 
+  void Group::FDRecvTask::setReceiveFD()
+  {
+    _receive_fd = true;
+    return;
+  }
+
   bool Group::FDRecvTask::receive()
   {
-    if (_size_received == _size_total) {
-      return true;
-    }
     if (_max_duration_usec != 0
 	&& currentAgeMicrosec() > _max_duration_usec) {
       throw std::runtime_error("recv timeout");
+    }
+    if (receiveData()) {
+      return receiveFD();
+    } else {
+      return false;
+    }
+  }
+
+  bool Group::FDRecvTask::receiveData()
+  {
+    if (_size_received == _size_total) {
+      return true;
     }
 
     const size_t size_toread = _size_total - _size_received;
@@ -500,6 +518,27 @@ namespace pgl
     return _size_received == _size_total;
   }
 
+  bool Group::FDRecvTask::receiveFD()
+  {
+    if (!_receive_fd) {
+      return true;
+    }
+
+    _fd = readFD(fd(), 0);
+
+    if (_fd != -1) {
+      _receive_fd = false;
+      return true;
+    } else {
+      return false;
+    }
+  }
+
+  int Group::FDRecvTask::getFD() const
+  {
+    return _fd;
+  }
+
   /////
   //
   // pgl::Group::FDSendTask method definitions
@@ -513,6 +552,8 @@ namespace pgl
     _size_total = send_size;
     _buffer = reinterpret_cast<const uint8_t*>(send_buffer);
     _max_duration_usec = 0;
+    _fd = -1;
+    _send_fd = false;
   }
 
   bool Group::FDSendTask::run(Group& group)
@@ -539,12 +580,22 @@ namespace pgl
 
   bool Group::FDSendTask::send()
   {
-    if (_size_written == _size_total) {
-      return true;
-    }
     if (_max_duration_usec != 0
 	&& currentAgeMicrosec() > _max_duration_usec) {
       throw std::runtime_error("send timeout");
+    }
+
+    if (sendData()) {
+      return sendFD();
+    } else {
+      return false;
+    }
+  }
+
+  bool Group::FDSendTask::sendData()
+  {
+    if (_size_written == _size_total) {
+      return true;
     }
 
     const size_t size_tosend = _size_total - _size_written;
@@ -567,6 +618,27 @@ namespace pgl
     }
 
     return _size_written == _size_total;
+  }
+
+  bool Group::FDSendTask::sendFD()
+  {
+    if (!_send_fd) {
+      return true;
+    }
+
+    if (writeFD(fd(), _fd, 0) != -1) {
+      _send_fd = false;
+      return true;
+    } else {
+      return false;
+    }
+  }
+
+  void Group::FDSendTask::setSendFD(int fd)
+  {
+    _send_fd = true;
+    _fd = fd;
+    return;
   }
 
   /////
@@ -607,10 +679,17 @@ namespace pgl
   {
     setReceiveBuffer(_msg.dataWritable());
     setReceiveSize(_msg.dataSize());
+    if (header.type == Message::Type::M2M_FD) {
+      setReceiveFD();
+    }
   }
 
   bool Group::MessageRecvTask::process(Group& group)
   {
+    if (_msg.getTypeUnsafe() == Message::Type::M2M_FD) {
+      _msg.setFD(getFD());
+    }
+
     group.masterHandleBusMessage(_msg, fd());
     return true;
   }
@@ -627,6 +706,9 @@ namespace pgl
   {
     setSendBuffer(_msg.buffer());
     setSendSize(_msg.bufferSize());
+    if (_msg.getType() == Message::Type::M2M_FD) {
+      setSendFD(_msg.getFD());
+    }
   }
 
 } /* namespace pgl */

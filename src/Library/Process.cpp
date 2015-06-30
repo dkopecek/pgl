@@ -30,11 +30,14 @@ namespace pgl
   Process::Process()
     : _rnd_hashbyte(0, 31)
   {
+    _pid = -1;
+    _pid_master = -1;
     _bus_wfd = -1;
     _bus_rfd = -1;
     _state = Process::State::Initialized;
     _keep_env = { "SSH_AUTH_SOCK", "GPG_AGENT_INFO" };
     _closeall_fds = 1;
+    _bus_recv_queued = false;
   }
 
   Process::~Process()
@@ -178,7 +181,7 @@ namespace pgl
 
   pid_t Process::messageBusRecv(pid_t peer_pid, std::string& message)
   {
-    const Message msg = messageBusRecv();
+    const Message msg = std::move(messageBusRecv());
     msg.copyFromData(message);
     return msg.getFrom();
   }
@@ -220,7 +223,7 @@ namespace pgl
      * fd using sendmsg.
      */
     if (msg.getType() == Message::M2M_FD) {
-      messageBusSendFD(_bus_wfd, msg.getFD(), 3 * 1000 * 1000);
+      writeFD(_bus_wfd, msg.getFD(), 3 * 1000 * 1000);
     }
 
     return;
@@ -232,6 +235,10 @@ namespace pgl
 
     if (lock_bus) {
       lock_r.lock();
+    }
+
+    if (messageBusRecvQueued()) {
+      return std::move(messageBusRecvDequeue(/*lock_bus=*/false));
     }
 
     /* Read reply */
@@ -248,8 +255,8 @@ namespace pgl
      * but cannot validate until the fd is received.
      */
     if (msg.getTypeUnsafe() == Message::Type::M2M_FD) {
-      const int fd = messageBusReadFD(_bus_rfd, 3 * 1000 * 1000);
-      msg.setFD(fd);
+      const int fd = readFD(_bus_rfd, 3 * 1000 * 1000);
+      msg.setFDUnsafe(fd);
     }
 
     /* Check sanity of the whole message */
@@ -264,7 +271,7 @@ namespace pgl
     std::unique_lock<std::mutex> lock_r(_bus_rfd_mutex);
 
     messageBusSend(msg, /*lock_bus=*/false);
-    return messageBusRecv(/*lock_bus=*/false);
+    return std::move(messageBusRecv(/*lock_bus=*/false));
   }
 
   void Process::messageBusSendFD(pid_t peer_pid, int fd, const std::string& message)
@@ -285,22 +292,24 @@ namespace pgl
       throw std::runtime_error("fd pointer null");
     }
 
-    const Message msg = messageBusRecv();
+    Message msg = std::move(messageBusRecv());
 
     if (msg.getType() != Message::Type::M2M_FD) {
-      //enqueueMessage(std::move(msg));
+      messageBusRecvEnqueue(std::move(msg));
+      return (pid_t)-1;
     }
     if (msg.getFrom() != peer_pid) {
-      //enqueueMessage(std::move(msg));
+      messageBusRecvEnqueue(std::move(msg));
+      return (pid_t)-1;
     }
 
     *fd = msg.getFD();
 
     if (message != nullptr) {
-      
+      msg.copyFromData(*message);
     }
-    
-    return;
+
+    return msg.getFrom();
   }
   
   // NOTE: Add a sanity field. 
@@ -546,94 +555,6 @@ namespace pgl
     return;
   }
 
-  static uint8_t zero_byte = 0;
-
-  void Process::messageBusSendFD(int bus_fd, int fd, unsigned int max_delay_usec)
-  {
-    /* Intialize the message header structure */
-    struct msghdr hdr;
-    memset(&hdr, 0, sizeof hdr);
-
-    /* Setup the control message data with the fd */
-    uint8_t cmsg_data[CMSG_SPACE(sizeof(int))];
-
-    hdr.msg_control = cmsg_data;
-    hdr.msg_controllen = sizeof cmsg_data;
-
-    struct cmsghdr *cmsg = CMSG_FIRSTHDR(&hdr);
-    cmsg->cmsg_len = CMSG_LEN(sizeof(int));
-    cmsg->cmsg_level = SOL_SOCKET;
-    cmsg->cmsg_type = SCM_RIGHTS;
-    memcpy(CMSG_DATA(cmsg), &fd, sizeof(int));
-
-    /* Setup the message header */
-    struct iovec iov = { &zero_byte, sizeof zero_byte };
-    hdr.msg_iov = &iov;
-    hdr.msg_iovlen = 1;
-    hdr.msg_controllen = cmsg->cmsg_len;
-
-    /* Loop until sent or timeout */
-    while(true) {
-      const ssize_t ret = sendmsg(bus_fd, &hdr, 0);
-
-      if (ret != -1) {
-	/* The message was successfully sent */
-	break;
-      }
-      else {
-	/*
-	 * An error happend, no data was sent. If the error is only
-	 * a temporary one and there's still time left, we try again.
-	 */
-	if (errno == EAGAIN ||
-	    errno == EWOULDBLOCK) {
-	  /* Wa have to try again if there's still time */
-	  continue;
-	}
-	else {
-	  throw std::runtime_error("Cannot send file descriptor to the bus");
-	}
-      }
-    }
-
-    return;
-  }
-
-  int Process::messageBusReadFD(int bus_fd, unsigned int max_delay_usec)
-  {
-    struct msghdr hdr;
-    memset(&hdr, 0, sizeof hdr);
-
-    uint8_t cmsg_data[CMSG_SPACE(sizeof(int))];
-    memset(&cmsg_data, 0, sizeof cmsg_data);
-
-    hdr.msg_control = cmsg_data;
-    hdr.msg_controllen = sizeof cmsg_data;
-
-    while(true) {
-      const ssize_t ret = recvmsg(bus_fd, &hdr, 0);
-      if (ret != -1) {
-	break;
-      }
-    }
-
-    const struct cmsghdr *cmsg = CMSG_FIRSTHDR(&hdr);
-
-    if (cmsg == nullptr) {
-      throw std::runtime_error("Expected to receive control data in the message");
-    }
-    if (cmsg->cmsg_type != SCM_RIGHTS) {
-      throw std::runtime_error("Invalid control data type");
-    }
-
-    /* XXX: check cmsg data length */
-
-    int fd = -1;
-    memcpy(&fd, CMSG_DATA(cmsg), sizeof fd);
-
-    return fd;
-  }
-
   void Process::terminate(int signal)
   {
     const pid_t pid = getPID();
@@ -682,4 +603,40 @@ namespace pgl
   {
     return (uint8_t)pos;
   }
+
+  void Process::messageBusRecvEnqueue(Message&& msg)
+  {
+    std::unique_lock<std::mutex> bus_lock(_bus_rfd_mutex);
+    _bus_recv_queue.emplace(std::move(msg));
+    _bus_recv_queued = true;
+    return;
+  }
+
+  Message Process::messageBusRecvDequeue(bool lock_bus)
+  {
+    std::unique_lock<std::mutex> bus_lock(_bus_rfd_mutex, std::defer_lock);
+
+    if (lock_bus) {
+      bus_lock.lock();
+    }
+    if (_bus_recv_queue.empty()) {
+      throw std::runtime_error("Nothing to dequeue!");
+    }
+
+    Message msg = std::move(_bus_recv_queue.front());
+    //msg.destructiveCopy(_bus_recv_queue.front());
+    _bus_recv_queue.pop();
+
+    if (_bus_recv_queue.empty()) {
+      _bus_recv_queued = false;
+    }
+
+    return std::move(msg);
+  }
+
+  bool Process::messageBusRecvQueued() const
+  {
+    return _bus_recv_queued;
+  }
+
 } /* namespace pgl */
