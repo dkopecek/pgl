@@ -137,9 +137,31 @@ namespace pgl
     if (!_finalized) {
       throw std::runtime_error("Cannot read from an incomplete message");
     }
+    return getTypeUnsafe();
+  }
+
+  Message::Type Message::getTypeUnsafe() const
+  {
     return _header_ptr->type;
   }
   
+  void Message::setFD(int fd)
+  {
+    if (!_finalized) {
+      throw std::runtime_error("Cannot modify finalized message");
+    }
+    _fd = fd;
+    return;
+  }
+
+  int Message::getFD() const
+  {
+    if (!_finalized) {
+      throw std::runtime_error("Cannot read from an incomplete message");
+    }
+    return _fd;
+  }
+
   void Message::finalize()
   {
     if (_finalized) {

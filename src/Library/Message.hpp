@@ -64,6 +64,8 @@ namespace pgl
     pid_t getTo() const;
     void setType(Type type);
     Type getType() const;
+    void setFD(int fd);
+    int getFD() const;
     void finalize();
     void validate();
 
@@ -143,6 +145,8 @@ namespace pgl
     {
       return _data_size;
     }
+
+    Type getTypeUnsafe() const;
 
   private:
     std::unique_ptr<uint8_t> _buffer; /**< Memory buffer that holds the whole message (header + data) */

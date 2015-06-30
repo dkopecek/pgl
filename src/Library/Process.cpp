@@ -23,6 +23,7 @@
 #include <sys/select.h>
 #include <sys/time.h>
 #include <fcntl.h>
+#include <sys/socket.h>
 
 namespace pgl
 {
@@ -219,7 +220,7 @@ namespace pgl
      * fd using sendmsg.
      */
     if (msg.getType() == Message::M2M_FD) {
-      messageBusSendFD(_bus_wfd, msg.fd(), 3 * 1000 * 1000);
+      messageBusSendFD(_bus_wfd, msg.getFD(), 3 * 1000 * 1000);
     }
 
     return;
@@ -246,7 +247,7 @@ namespace pgl
      * Problem: cannot trust the data until validated
      * but cannot validate until the fd is received.
      */
-    if (msg.getType() == Message::Type::M2M_FD) {
+    if (msg.getTypeUnsafe() == Message::Type::M2M_FD) {
       const int fd = messageBusReadFD(_bus_rfd, 3 * 1000 * 1000);
       msg.setFD(fd);
     }
@@ -266,6 +267,42 @@ namespace pgl
     return messageBusRecv(/*lock_bus=*/false);
   }
 
+  void Process::messageBusSendFD(pid_t peer_pid, int fd, const std::string& message)
+  {
+    Message msg(message.size());
+    msg.setFrom(getPID());
+    msg.setTo(peer_pid);
+    msg.setFD(fd);
+    msg.setType(Message::Type::M2M_FD);
+    msg.copyToData(message);
+    messageBusSend(msg);
+    return;
+  }
+
+  pid_t Process::messageBusRecvFD(pid_t peer_pid, int *fd, std::string *message)
+  {
+    if (fd == nullptr) {
+      throw std::runtime_error("fd pointer null");
+    }
+
+    const Message msg = messageBusRecv();
+
+    if (msg.getType() != Message::Type::M2M_FD) {
+      //enqueueMessage(std::move(msg));
+    }
+    if (msg.getFrom() != peer_pid) {
+      //enqueueMessage(std::move(msg));
+    }
+
+    *fd = msg.getFD();
+
+    if (message != nullptr) {
+      
+    }
+    
+    return;
+  }
+  
   // NOTE: Add a sanity field. 
   //
   // Sanity field serves for the receiving side to know
@@ -509,7 +546,7 @@ namespace pgl
     return;
   }
 
-  static const uint8_t zero_byte = 0;
+  static uint8_t zero_byte = 0;
 
   void Process::messageBusSendFD(int bus_fd, int fd, unsigned int max_delay_usec)
   {
@@ -520,10 +557,10 @@ namespace pgl
     /* Setup the control message data with the fd */
     uint8_t cmsg_data[CMSG_SPACE(sizeof(int))];
 
-    hdr.msg_control = cmsg_data; // <===
-    hdr.msg_controllen = sizeof cmsg_data; /// <=== THIS WAS MISSING
+    hdr.msg_control = cmsg_data;
+    hdr.msg_controllen = sizeof cmsg_data;
 
-    struct cmsg_hdr *cmsg = CMSG_FIRSTHDR(&hdr);
+    struct cmsghdr *cmsg = CMSG_FIRSTHDR(&hdr);
     cmsg->cmsg_len = CMSG_LEN(sizeof(int));
     cmsg->cmsg_level = SOL_SOCKET;
     cmsg->cmsg_type = SCM_RIGHTS;
@@ -533,7 +570,6 @@ namespace pgl
     struct iovec iov = { &zero_byte, sizeof zero_byte };
     hdr.msg_iov = &iov;
     hdr.msg_iovlen = 1;
-    hdr.msg_control = cmsg_data;
     hdr.msg_controllen = cmsg->cmsg_len;
 
     /* Loop until sent or timeout */
@@ -571,8 +607,8 @@ namespace pgl
     uint8_t cmsg_data[CMSG_SPACE(sizeof(int))];
     memset(&cmsg_data, 0, sizeof cmsg_data);
 
-    hdr.cmsg_control = cmsg_data;
-    hdr.cmsg_controllen = sizeof cmsg_data;
+    hdr.msg_control = cmsg_data;
+    hdr.msg_controllen = sizeof cmsg_data;
 
     while(true) {
       const ssize_t ret = recvmsg(bus_fd, &hdr, 0);

@@ -128,8 +128,9 @@ namespace pgl
      */
     pid_t messageBusRecv(pid_t peer_pid, std::string& message);
 
-    //void messageBusSend(pid_t peer_pid, const std::string& message, int fd);
-    //pid_t messageBusRecv(pid_t peer_pid, Message& msg);
+    void messageBusSendFD(pid_t peer_pid, int fd, const std::string& message = std::string());
+
+    void messageBusRecvFD(pid_t peer_pid, int *fd, std::string *message = nullptr);
 
     /**/
     pid_t messageBusSendRecv(pid_t peer_pid, const std::string& message, std::string& reply);
