@@ -32,7 +32,8 @@ libpgl_la_SOURCES=\
 	src/Library/Message.hpp \
 	src/Library/Message.cpp \
 	src/Library/Utility.hpp \
-	src/Library/Utility.cpp
+	src/Library/Utility.cpp \
+	src/Library/Timeout.hpp
 
 pkginclude_HEADERS=\
 	src/Library/Group.hpp \

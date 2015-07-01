@@ -19,6 +19,7 @@
 #pragma once
 
 #include "Process.hpp"
+#include "Timeout.hpp"
 #include <string>
 #include <map>
 #include <queue>
@@ -76,24 +77,25 @@ namespace pgl
     class FDTask
     {
     public:
-      FDTask(const int fd);
+      FDTask(const int fd, unsigned int usec_timeout);
       bool operator==(const FDTask& rhs) const;
       bool operator<(const FDTask& rhs) const;
       bool operator>(const FDTask& rhs) const;
       int fd() const;
-      uint64_t currentAgeMicrosec() const;
+      const Timeout& timeout() const;
 
       virtual bool run(Group& group) = 0;
 
     private:
       const int _fd;
       struct timespec _ts_created;
+      Timeout _timeout;
     };
 
     class FDRecvTask : public FDTask
     {
     public:
-      FDRecvTask(int fd, void *recv_buffer = nullptr, size_t recv_size = 0);
+      FDRecvTask(int fd, void *recv_buffer = nullptr, size_t recv_size = 0, unsigned int usec_timeout = 0);
       bool run(Group& group) final;
       void setReceiveBuffer(void *buffer);
       void setReceiveSize(size_t size);
@@ -119,7 +121,7 @@ namespace pgl
     class FDSendTask : public FDTask
     {
     public:
-      FDSendTask(int fd, void *send_buffer = nullptr, size_t send_size = 0);
+      FDSendTask(int fd, void *send_buffer = nullptr, size_t send_size = 0, unsigned int usec_timeout = 0);
       bool run(Group& group) final;
       void setSendBuffer(const void *buffer);
       void setSendSize(size_t size);
@@ -143,7 +145,7 @@ namespace pgl
     class HeaderRecvTask : public FDRecvTask
     {
     public:
-      HeaderRecvTask(int fd);
+      HeaderRecvTask(int fd, unsigned int usec_timeout);
       bool process(Group& group) final;
 
     private:
@@ -153,7 +155,7 @@ namespace pgl
     class MessageRecvTask : public FDRecvTask
     {
     public:
-      MessageRecvTask(int fd, const Message::Header& header);
+      MessageRecvTask(int fd, const Message::Header& header, unsigned int usec_timeout = 0);
       bool process(Group& group) final;
 
     private:
@@ -163,7 +165,7 @@ namespace pgl
     class MessageSendTask : public FDSendTask
     {
     public:
-      MessageSendTask(int fd, Message& msg);
+      MessageSendTask(int fd, Message& msg, unsigned int usec_timeout = 0);
 
     private:
       Message _msg;

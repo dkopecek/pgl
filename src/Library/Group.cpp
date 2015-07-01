@@ -286,7 +286,7 @@ namespace pgl
 
   void Group::masterReceiveHeader(int fd)
   {
-    std::shared_ptr<FDTask> task = std::make_shared<Group::HeaderRecvTask>(fd);
+    std::shared_ptr<FDTask> task = std::make_shared<Group::HeaderRecvTask>(fd, 3 * 1000 * 1000);
 
     if (task->run(*this)) {
       return;
@@ -389,8 +389,9 @@ namespace pgl
   //
   /////
 
-  Group::FDTask::FDTask(const int fd)
-    : _fd(fd)
+  Group::FDTask::FDTask(const int fd, const unsigned int usec_timeout)
+    : _fd(fd),
+      _timeout(usec_timeout)
   {
     _ts_created.tv_sec = 0;
     _ts_created.tv_nsec = 0;
@@ -420,18 +421,9 @@ namespace pgl
     return _fd;
   }
 
-  uint64_t Group::FDTask::currentAgeMicrosec() const
+  const Timeout& Group::FDTask::timeout() const
   {
-    struct timespec ts_now;
-
-    ts_now.tv_sec = 0;
-    ts_now.tv_nsec = 0;
-
-    if (clock_gettime(CLOCK_MONOTONIC, &ts_now) != 0) {
-      throw std::runtime_error("clock_gettime failed");
-    }
-
-    return tsMicrosecDiff(ts_now, _ts_created);
+    return _timeout;
   }
 
   /////
@@ -440,13 +432,12 @@ namespace pgl
   //
   /////
 
-  Group::FDRecvTask::FDRecvTask(int fd, void *recv_buffer, size_t recv_size)
-    : Group::FDTask(fd)
+  Group::FDRecvTask::FDRecvTask(int fd, void *recv_buffer, size_t recv_size, unsigned int usec_timeout)
+    : Group::FDTask(fd, usec_timeout)
   {
     _size_received = 0;
     _size_total = recv_size;
     _buffer = reinterpret_cast<uint8_t*>(recv_buffer);
-    _max_duration_usec = 0;
     _fd = -1;
     _receive_fd = false;
   }
@@ -479,8 +470,7 @@ namespace pgl
 
   bool Group::FDRecvTask::receive()
   {
-    if (_max_duration_usec != 0
-	&& currentAgeMicrosec() > _max_duration_usec) {
+    if (_max_duration_usec != 0 && timeout()) {
       throw std::runtime_error("recv timeout");
     }
     if (receiveData()) {
@@ -545,13 +535,12 @@ namespace pgl
   //
   /////
 
-  Group::FDSendTask::FDSendTask(int fd, void *send_buffer, size_t send_size)
-    : Group::FDTask(fd)
+  Group::FDSendTask::FDSendTask(int fd, void *send_buffer, size_t send_size, unsigned int usec_timeout)
+    : Group::FDTask(fd, usec_timeout)
   {
     _size_written = 0;
     _size_total = send_size;
     _buffer = reinterpret_cast<const uint8_t*>(send_buffer);
-    _max_duration_usec = 0;
     _fd = -1;
     _send_fd = false;
   }
@@ -580,8 +569,7 @@ namespace pgl
 
   bool Group::FDSendTask::send()
   {
-    if (_max_duration_usec != 0
-	&& currentAgeMicrosec() > _max_duration_usec) {
+    if (_max_duration_usec != 0 && timeout()) {
       throw std::runtime_error("send timeout");
     }
 
@@ -647,8 +635,8 @@ namespace pgl
   //
   /////
 
-  Group::HeaderRecvTask::HeaderRecvTask(int fd)
-    : Group::FDRecvTask(fd, &_header, sizeof(Message::Header))
+  Group::HeaderRecvTask::HeaderRecvTask(int fd, unsigned int usec_timeout)
+    : Group::FDRecvTask(fd, &_header, sizeof(Message::Header), usec_timeout)
   {
   }
 
@@ -672,9 +660,8 @@ namespace pgl
   // pgl::Group::MessageRecvTask method definitions
   //
   /////
-
-  Group::MessageRecvTask::MessageRecvTask(int fd, const Message::Header& header)
-    : Group::FDRecvTask(fd),
+  Group::MessageRecvTask::MessageRecvTask(int fd, const Message::Header& header, unsigned int usec_timeout)
+    : Group::FDRecvTask(fd, nullptr, 0, usec_timeout),
       _msg(header)
   {
     setReceiveBuffer(_msg.dataWritable());
@@ -700,8 +687,8 @@ namespace pgl
   //
   /////
 
-  Group::MessageSendTask::MessageSendTask(int fd, Message& msg)
-    : Group::FDSendTask(fd),
+  Group::MessageSendTask::MessageSendTask(int fd, Message& msg, unsigned int usec_timeout)
+    : Group::FDSendTask(fd, nullptr, 0, usec_timeout),
       _msg(std::move(msg))
   {
     setSendBuffer(_msg.buffer());

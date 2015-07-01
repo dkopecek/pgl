@@ -17,6 +17,7 @@
 // Authors: Daniel Kopecek <dkopecek@redhat.com>
 //
 #include "Utility.hpp"
+#include "Timeout.hpp"
 #include <sys/resource.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -43,19 +44,12 @@ namespace pgl
     return;
   }
 
-  uint64_t tsMicrosecDiff(const struct timespec& ts_a, const struct timespec& ts_b)
-  {
-    const uint64_t ns_abs_a = ts_a.tv_sec * 1000 * 1000 * 1000 + ts_a.tv_nsec;
-    const uint64_t ns_abs_b = ts_b.tv_sec * 1000 * 1000 * 1000 + ts_b.tv_nsec;
-    const uint64_t ns_diff = (ns_abs_a > ns_abs_b ?
-			      ns_abs_a - ns_abs_b : ns_abs_b - ns_abs_a);
-    return ns_diff / 1000;
-  }
-
   static const uint8_t zero_byte = 0;
 
   int writeFD(int bus_fd, int fd, unsigned int max_delay_usec)
   {
+    Timeout timeout(max_delay_usec);
+
     /* Intialize the message header structure */
     struct msghdr hdr;
     memset(&hdr, 0, sizeof hdr);
@@ -85,20 +79,25 @@ namespace pgl
 
       if (ret != -1) {
 	/* The message was successfully sent */
-	return fd;
+	return 0;
       }
       else {
 	/*
 	 * An error happend, no data was sent. If the error is only
 	 * a temporary one and there's still time left, we try again.
 	 */
-	if (errno == EAGAIN ||
-	    errno == EWOULDBLOCK) {
-	  /* Wa have to try again if there's still time */
-	  continue;
+	if (errno == EAGAIN || errno == EWOULDBLOCK) {
+	  if (timeout) {
+	    throw std::runtime_error("write operation takes too long");
+	  }
+	  else {
+	    continue;
+	  }
 	}
 	else {
-	  throw std::runtime_error("messageBusWriteFD: cannot send file descriptor to the bus: " + std::to_string(errno));
+	  throw std::runtime_error("messageBusWriteFD: cannot send "
+				   "file descriptor to the bus: "
+				   + std::to_string(errno));
 	}
       }
     }
@@ -108,6 +107,8 @@ namespace pgl
 
   int readFD(int bus_fd, unsigned int max_delay_usec)
   {
+    Timeout timeout(max_delay_usec);
+
     struct msghdr hdr;
     memset(&hdr, 0, sizeof hdr);
 
@@ -119,8 +120,24 @@ namespace pgl
 
     while(true) {
       const ssize_t ret = recvmsg(bus_fd, &hdr, 0);
+
       if (ret != -1) {
+	/* message received */
 	break;
+      }
+      else {
+	if (errno == EAGAIN || errno == EWOULDBLOCK) {
+	  if (timeout) {
+	    throw std::runtime_error("read operation takes too long");
+	  }
+	  else {
+	    /* There's still time, try again */
+	    continue;
+	  }
+	}
+	else {
+	  throw ;
+	}
       }
     }
 

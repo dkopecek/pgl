@@ -30,10 +30,8 @@ namespace pgl
   void closeAllFDs(int from_fd);
 
   /*
-   * Microsecond difference between two points in time stored in a timespec structure.
+   * Send a file descriptor over the `bus_fd`. Returns 0 on success and -1 in case of a failure.
    */
-  uint64_t tsMicrosecDiff(const struct timespec& ts_a, const struct timespec& ts_b);
-
   int writeFD(int bus_fd, int fd, unsigned int max_delay_usec);
   int readFD(int bus_fd, unsigned int max_delay_usec);
 

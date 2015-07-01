@@ -18,6 +18,7 @@
 //
 #include "Process.hpp"
 #include "Message.hpp"
+#include "Timeout.hpp"
 #include "Utility.hpp"
 #include <sys/prctl.h>
 #include <sys/select.h>
@@ -458,12 +459,8 @@ namespace pgl
 
   void Process::messageBusWrite(int fd, const uint8_t *data, size_t size, unsigned int max_delay_usec)
   {
+    Timeout timeout(max_delay_usec);
     size_t size_written = 0;
-    struct timespec ts_start;
-
-    if (clock_gettime(CLOCK_MONOTONIC, &ts_start) != 0) {
-      throw std::runtime_error("clock_gettime failed");
-    }
 
     while (size_written < size) {
       const ssize_t size_write = write(fd, data, size);
@@ -474,15 +471,11 @@ namespace pgl
 	 * and if we have time for another try.
 	 */
 	if (errno == EWOULDBLOCK || errno == EAGAIN || errno == EINTR) {
-	  struct timespec ts_now;
-	  if (clock_gettime(CLOCK_MONOTONIC, &ts_now) != 0) {
-	    throw std::runtime_error("clock_gettime failed");
-	  }
-	  if (tsMicrosecDiff(ts_now, ts_start) >= max_delay_usec) {
+	  if (timeout) {
 	    throw std::runtime_error("write operation takes too long");
 	  }
 	  else {
-	    /* Try to write again */
+	    /* There's still time, try to write again */
 	    continue;
 	  }
 	}
@@ -506,12 +499,8 @@ namespace pgl
 
   void Process::messageBusRead(int fd, uint8_t *data, size_t size, unsigned int max_delay_usec)
   {
+    Timeout timeout(max_delay_usec);
     size_t size_stored = 0;
-    struct timespec ts_start;
-
-    if (clock_gettime(CLOCK_MONOTONIC, &ts_start) != 0) {
-      throw std::runtime_error("clock_gettime failed");
-    }
 
     while (size_stored < size) {
       const ssize_t size_read = read(fd, data, size);
@@ -522,15 +511,11 @@ namespace pgl
 	 * and if we have time for another try.
 	 */
 	if (errno == EWOULDBLOCK || errno == EAGAIN || errno == EINTR) {
-	  struct timespec ts_now;
-	  if (clock_gettime(CLOCK_MONOTONIC, &ts_now) != 0) {
-	    throw std::runtime_error("clock_gettime failed");
-	  }
-	  if (tsMicrosecDiff(ts_now, ts_start) >= max_delay_usec) {
+	  if (timeout) {
 	    throw std::runtime_error("read operation takes too long");
 	  }
 	  else {
-	    /* Try to read again */
+	    /* There's still time, try to read again */
 	    continue;
 	  }
 	}
