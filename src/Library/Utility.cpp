@@ -108,9 +108,14 @@ namespace pgl
   int readFD(int bus_fd, unsigned int max_delay_usec)
   {
     Timeout timeout(max_delay_usec);
+    uint8_t zero = 0xff;
+    struct iovec iov = { &zero, 1 };
 
     struct msghdr hdr;
     memset(&hdr, 0, sizeof hdr);
+
+    hdr.msg_iov = &iov;
+    hdr.msg_iovlen = 1;
 
     uint8_t cmsg_data[CMSG_SPACE(sizeof(int))];
     memset(&cmsg_data, 0, sizeof cmsg_data);

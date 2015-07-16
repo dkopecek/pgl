@@ -63,12 +63,13 @@ namespace pgl
     const std::string& getExecPath() const;
     void setMessageBusFDs(int rfd, int wfd);
     void getMessageBusFDs(int *rfd_ptr, int *wfd_ptr);
-
-    //void setMessageBusSendTimeout(unsigned int usec);
-    //void setMessageBusRecvTimeout(unsigned int usec);
-
     void setCloseAllFDs(unsigned int from_fd);
 
+    //
+    // TODO
+    //
+    //void setMessageBusSendTimeout(unsigned int usec);
+    //void setMessageBusRecvTimeout(unsigned int usec);
     //void setRunAsUser();
     //void setRunAsGroup();
     //void setChroot();
@@ -137,9 +138,18 @@ namespace pgl
     /**/
     pid_t messageBusSendRecv(pid_t peer_pid, const std::string& message, std::string& reply);
 
-    Message messageBusSendRecv(Message& msg);
+    Message messageBusSendRecv(Message& msg, Message::Type recv_type);
     void messageBusSend(Message& msg, bool lock_bus = true);
-    Message messageBusRecv(bool lock_bus = true);
+
+    /*
+     * Receive a message of the specified type. Message of different types
+     * will be queued in the receiving queue.
+     */
+    Message messageBusRecvMessage(Message::Type type, bool lock_bus);
+    /*
+     * Receive a message (of any type) from the message bus.
+     */
+    Message messageBusRecvMessage(bool lock_bus = true);
 
     // NOTE: Add a sanity field. 
     //
@@ -177,9 +187,20 @@ namespace pgl
     uint8_t messageHashByteAt(size_t pos, const Message::Header* header, const uint8_t *data, size_t size);
     void prepareMemberEnvVariables(char **& env_array);
 
+    /*
+     * Put the message in the receive queue.
+     */
     void messageBusRecvEnqueue(Message&& msg);
-    Message messageBusRecvDequeue(bool lock_bus);
-    bool messageBusRecvQueued() const;
+
+    /*
+     * Get a message from receive queue.
+     */
+    Message messageBusRecvDequeue(Message::Type type, bool lock_bus);
+
+    /*
+     * Check whether a message is queued for receiving.
+     */
+    bool messageBusRecvQueued(Message::Type type) const;
 
   private:
     std::string _name;
@@ -196,8 +217,8 @@ namespace pgl
     std::mutex _bus_rfd_mutex;
     int _bus_rfd;
 
-    std::queue<Message> _bus_recv_queue;
-    std::atomic<bool> _bus_recv_queued;
+    std::queue<Message> _bus_recv_queue[Message::type_count];
+    std::atomic<bool> _bus_recv_queued[Message::type_count];
 
     State _state;
 

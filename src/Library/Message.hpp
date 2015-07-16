@@ -32,20 +32,24 @@ namespace pgl
   {
   public:
     enum Type {
-      M2M,
-      M2M_FD,
-      BUS_PID_LOOKUP, /**< member request to resolve a process name to it's current pid */
-      BUS_PID_FORGET, /**< member request to forget that it asked about a pid */
-      BUS_HEARTBEAT /**< member heartbeat */
+      M2M = 0x000000, /**< Generic message */
+      M2M_FD = 0x001111, /**< Generic message followed by an AF_UNIX/SCM_RIGHTS message with one fd */
+      BUS_PID_LOOKUP = 0x002222, /**< Member request to resolve a process name to it's current pid */
+      BUS_PID_FORGET = 0x003333, /**< Member request to forget that it asked about a pid */
+      BUS_HEARTBEAT = 0x004444,/**< Member heartbeat */
+      M2M_ANY = 0xfffff0, /**< Special type representing any M2M message */
+      ANY = 0xffffff
     };
+
+    static const unsigned int type_count = 5;
 
     struct Header
     {
       pid_t pid_from; /**< Source PID */
       pid_t pid_to; /**< Destination PID */
       size_t size; /**< Message size (not including the size of the header) */
-      uint8_t hbp; /**< Hash byte position */
-      uint8_t hbv; /**< Hash byte value */
+      uint8_t hb_pos; /**< Hash byte value position */
+      uint8_t hb_val; /**< Hash byte value */
       Type type; /**< Type of the message. 0 means member-to-member. Other values are used for master-to-member control message */
       uint8_t data[0]; /**< Pointer to the data part of the message */
     };
@@ -59,7 +63,6 @@ namespace pgl
     Message& operator=(const Message&) = delete;
     ~Message();
 
-    void destructiveCopy(Message& rhs);
     void destroy();
     void setFrom(pid_t pid);
     pid_t getFrom() const;

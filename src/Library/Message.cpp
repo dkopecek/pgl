@@ -39,8 +39,8 @@ namespace pgl
     _header_ptr->pid_from = -1;
     _header_ptr->pid_to = -1;
     _header_ptr->size = _data_size;
-    _header_ptr->hbp = 0;
-    _header_ptr->hbv = 0;
+    _header_ptr->hb_pos = 0;
+    _header_ptr->hb_val = 0;
     _header_ptr->type = Type::M2M;
 
     memset(_data_ptr, 0, _data_size);
@@ -68,6 +68,7 @@ namespace pgl
   Message& Message::operator=(Message&& rhs)
   {
     if (this != &rhs) {
+      destroy();
       _buffer_size = rhs._buffer_size;
       _data_size = rhs._data_size;
       _buffer = std::move(rhs._buffer);
@@ -81,10 +82,11 @@ namespace pgl
   }
 
   Message::Message(Message&& rhs)
-    : _buffer_size(rhs._buffer_size),
-      _data_size(rhs._data_size)
   {
     if (this != &rhs) {
+      destroy();
+      _buffer_size = rhs._buffer_size;
+      _data_size = rhs._data_size;
       _buffer = std::move(rhs._buffer);
       _header_ptr = rhs._header_ptr;
       _data_ptr = rhs._data_ptr;
@@ -97,22 +99,7 @@ namespace pgl
 
   Message::~Message()
   {
-    _buffer = nullptr;
     destroy();
-  }
-
-  void Message::destructiveCopy(Message& rhs)
-  {
-    if (this != &rhs) {
-      _buffer_size = rhs._buffer_size;
-      _data_size = rhs._data_size;
-      _buffer = std::move(rhs._buffer);
-      _header_ptr = rhs._header_ptr;
-      _data_ptr = rhs._data_ptr;
-      _finalized = rhs._finalized;
-      _fd = rhs._fd;
-      rhs.destroy();
-    }
   }
 
   void Message::destroy()

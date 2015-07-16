@@ -38,7 +38,9 @@ namespace pgl
     _state = Process::State::Initialized;
     _keep_env = { "SSH_AUTH_SOCK", "GPG_AGENT_INFO" };
     _closeall_fds = 1;
-    _bus_recv_queued = false;
+    for (unsigned int i = 0; i < Message::type_count; ++i) {
+      _bus_recv_queued[i] = false;
+    }
   }
 
   Process::~Process()
@@ -146,7 +148,7 @@ namespace pgl
     request.setType(Message::Type::BUS_PID_LOOKUP);
     request.copyToData(name);
 
-    const Message reply = messageBusSendRecv(request);
+    const Message reply = std::move(messageBusSendRecv(request, Message::Type::BUS_PID_LOOKUP));
     pid_t pid = -1;
     reply.copyFromData(pid);
 
@@ -182,7 +184,7 @@ namespace pgl
 
   pid_t Process::messageBusRecv(pid_t peer_pid, std::string& message)
   {
-    const Message msg = std::move(messageBusRecv());
+    const Message msg = std::move(messageBusRecvMessage(Message::Type::M2M));
     msg.copyFromData(message);
     return msg.getFrom();
   }
@@ -196,7 +198,7 @@ namespace pgl
     request.setType(Message::Type::M2M);
     request.copyToData(message);
 
-    const Message reply = messageBusSendRecv(request);
+    const Message reply = std::move(messageBusSendRecv(request, Message::Type::M2M));
     reply.copyFromData(reply_message);
 
     return reply.getFrom();
@@ -230,7 +232,7 @@ namespace pgl
     return;
   }
 
-  Message Process::messageBusRecv(bool lock_bus)
+  Message Process::messageBusRecvMessage(Message::Type type, bool lock_bus)
   {
     std::unique_lock<std::mutex> lock_r(_bus_rfd_mutex, std::defer_lock);
 
@@ -238,25 +240,56 @@ namespace pgl
       lock_r.lock();
     }
 
-    if (messageBusRecvQueued()) {
-      return std::move(messageBusRecvDequeue(/*lock_bus=*/false));
+    /*
+     * First check whether there's a message of the requested type queued
+     * in the receiving queue.
+     */
+    if (messageBusRecvQueued(type)) {
+      return std::move(messageBusRecvDequeue(type, /*lock_bus=*/false));
     }
 
-    /* Read reply */
+    /*
+     * Start the timeout counter for receiving the message of the requested
+     * type. If there's no message at all received, the timeout counter in
+     * the messageBusRecvMessage(bool) method will trigger an exception.
+     */
+    Timeout timeout(3 * 1000 * 1000);
+    do {
+      Message msg = std::move(messageBusRecvMessage(/*lock_bus=*/false));
+      if (msg.getType() == type) {
+	return std::move(msg);
+      }
+      else {
+	messageBusRecvEnqueue(std::move(msg));
+      }
+    } while(!timeout);
+
+    throw std::runtime_error("recv timeout");
+  }
+
+  Message Process::messageBusRecvMessage(bool lock_bus)
+  {
+    std::unique_lock<std::mutex> lock_r(_bus_rfd_mutex, std::defer_lock);
+
+    if (lock_bus) {
+      lock_r.lock();
+    }
+
+    /* Read message header */
     Message::Header header;
     messageBusRead(_bus_rfd, reinterpret_cast<uint8_t *>(&header),
-		   sizeof(Message::Header), 60 * 1000 * 1000);
+		   sizeof(Message::Header), 60 * 1000 * 1000); // XXX: hard-coded timeout
 
     /* Check reply_header.size value */
     Message msg(header);
-    messageBusRead(_bus_rfd, msg.dataWritable(), msg.dataSize(), 30 * 1000 * 1000);
+    messageBusRead(_bus_rfd, msg.dataWritable(), msg.dataSize(), 30 * 1000 * 1000); // XXX: hard-coded timeout
 
     /*
      * Problem: cannot trust the data until validated
      * but cannot validate until the fd is received.
      */
     if (msg.getTypeUnsafe() == Message::Type::M2M_FD) {
-      const int fd = readFD(_bus_rfd, 3 * 1000 * 1000);
+      const int fd = readFD(_bus_rfd, 3 * 1000 * 1000); // XXX: hard-coded timeout
       msg.setFDUnsafe(fd);
     }
 
@@ -266,13 +299,13 @@ namespace pgl
     return std::move(msg);
   }
 
-  Message Process::messageBusSendRecv(Message& msg)
+  Message Process::messageBusSendRecv(Message& msg, Message::Type recv_type)
   {
     std::unique_lock<std::mutex> lock_w(_bus_wfd_mutex);
     std::unique_lock<std::mutex> lock_r(_bus_rfd_mutex);
 
     messageBusSend(msg, /*lock_bus=*/false);
-    return std::move(messageBusRecv(/*lock_bus=*/false));
+    return std::move(messageBusRecvMessage(recv_type, /*lock_bus=*/false));
   }
 
   void Process::messageBusSendFD(pid_t peer_pid, int fd, const std::string& message)
@@ -293,12 +326,8 @@ namespace pgl
       throw std::runtime_error("fd pointer null");
     }
 
-    Message msg = std::move(messageBusRecv());
+    Message msg = std::move(messageBusRecvMessage(Message::Type::M2M_FD));
 
-    if (msg.getType() != Message::Type::M2M_FD) {
-      messageBusRecvEnqueue(std::move(msg));
-      return (pid_t)-1;
-    }
     if (msg.getFrom() != peer_pid) {
       messageBusRecvEnqueue(std::move(msg));
       return (pid_t)-1;
@@ -591,37 +620,50 @@ namespace pgl
 
   void Process::messageBusRecvEnqueue(Message&& msg)
   {
+    switch(msg.getType()) {
+    case Message::Type::M2M:
+    case Message::Type::M2M_FD:
+    case Message::Type::BUS_PID_LOOKUP:
+    case Message::Type::BUS_PID_FORGET:
+    case Message::Type::BUS_HEARTBEAT:
+      break;
+    default:
+      throw std::runtime_error("Cannot enqueue message of the given type");
+    }
+    const unsigned int n = (unsigned int)msg.getType() % Message::type_count;
     std::unique_lock<std::mutex> bus_lock(_bus_rfd_mutex);
-    _bus_recv_queue.emplace(std::move(msg));
-    _bus_recv_queued = true;
+    _bus_recv_queue[n].emplace(std::move(msg));
+    _bus_recv_queued[n] = true;
     return;
   }
 
-  Message Process::messageBusRecvDequeue(bool lock_bus)
+  Message Process::messageBusRecvDequeue(Message::Type type, bool lock_bus)
   {
     std::unique_lock<std::mutex> bus_lock(_bus_rfd_mutex, std::defer_lock);
+    const unsigned int n = (unsigned int)type % Message::type_count;
 
     if (lock_bus) {
       bus_lock.lock();
     }
-    if (_bus_recv_queue.empty()) {
+
+    if (_bus_recv_queue[n].empty()) {
       throw std::runtime_error("Nothing to dequeue!");
     }
 
-    Message msg = std::move(_bus_recv_queue.front());
-    //msg.destructiveCopy(_bus_recv_queue.front());
-    _bus_recv_queue.pop();
+    Message msg = std::move(_bus_recv_queue[n].front());
+    _bus_recv_queue[n].pop();
 
-    if (_bus_recv_queue.empty()) {
-      _bus_recv_queued = false;
+    if (_bus_recv_queue[n].empty()) {
+      _bus_recv_queued[n] = false;
     }
 
     return std::move(msg);
   }
 
-  bool Process::messageBusRecvQueued() const
+  bool Process::messageBusRecvQueued(Message::Type type) const
   {
-    return _bus_recv_queued;
+    const unsigned int n = (unsigned int)type % Message::type_count;
+    return _bus_recv_queued[n];
   }
 
 } /* namespace pgl */

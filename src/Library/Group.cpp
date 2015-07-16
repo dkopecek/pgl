@@ -286,6 +286,7 @@ namespace pgl
 
   void Group::masterReceiveHeader(int fd)
   {
+    std::cerr << "receiving header" << std::endl;
     std::shared_ptr<FDTask> task = std::make_shared<Group::HeaderRecvTask>(fd, 3 * 1000 * 1000);
 
     if (task->run(*this)) {
@@ -316,6 +317,7 @@ namespace pgl
 
   void Group::masterAddReadTask(std::shared_ptr<FDTask>& task)
   {
+    std::cerr << "adding read task" << std::endl;
     const int fd = task->fd();
     _tasks_rd[fd].push(task);
     return;
@@ -323,23 +325,25 @@ namespace pgl
 
   void Group::masterAddWriteTask(std::shared_ptr<FDTask>& task)
   {
+    std::cerr << "adding write task" << std::endl;
     const int fd = task->fd();
     _tasks_wr[fd].push(task);
     return;
   }
 
-  void Group::masterHandleBusMessage(Message& msg, int from_fd)
+  void Group::masterHandleBusMessage(Message&& msg, int from_fd)
   {
+    std::cerr << "handling bus message" << std::endl;
     msg.validate();
 
     switch(msg.getType())
       {
       case Message::Type::M2M:
       case Message::Type::M2M_FD:
-	masterRouteMessage(msg);
+	masterRouteMessage(std::move(msg));
 	break;
       case Message::Type::BUS_PID_LOOKUP:
-	masterPIDLookupReply(msg, from_fd);
+	masterPIDLookupReply(std::move(msg), from_fd);
 	break;
       default:
 	throw std::runtime_error("Unknown message type");
@@ -348,19 +352,21 @@ namespace pgl
     return;
   }
 
-  void Group::masterRouteMessage(Message& msg)
+  void Group::masterRouteMessage(Message&& msg)
   {
+    std::cerr << "Routing message" << std::endl;
     const pid_t pid_to = msg.getTo();
     auto const& process = _process_by_pid[pid_to];
     int fd = -1;
     process->getMessageBusFDs(nullptr, &fd);
-    std::shared_ptr<FDTask> task = std::make_shared<MessageSendTask>(fd, msg);
+    std::shared_ptr<FDTask> task = std::make_shared<MessageSendTask>(fd, std::move(msg));
     masterAddWriteTask(task);
     return;
   }
 
-  void Group::masterPIDLookupReply(Message& msg, int from_fd)
+  void Group::masterPIDLookupReply(Message&& msg, int from_fd)
   {
+    std::cerr << "PID lookup" << std::endl;
     const std::string name(reinterpret_cast<const char *>(msg.data()), msg.dataSize());
     pid_t pid = -1;
 
@@ -378,7 +384,7 @@ namespace pgl
     reply.copyToData(&pid, sizeof (pid_t));
     reply.finalize();
 
-    std::shared_ptr<FDTask> task = std::make_shared<MessageSendTask>(from_fd, reply);
+    std::shared_ptr<FDTask> task = std::make_shared<MessageSendTask>(from_fd, std::move(reply));
     masterAddWriteTask(task);
     return;
   }
@@ -393,12 +399,6 @@ namespace pgl
     : _fd(fd),
       _timeout(usec_timeout)
   {
-    _ts_created.tv_sec = 0;
-    _ts_created.tv_nsec = 0;
-
-    if (clock_gettime(CLOCK_MONOTONIC, &_ts_created) != 0) {
-      throw std::runtime_error("clock_gettime failed");
-    }
   }
 
   bool Group::FDTask::operator==(const Group::FDTask& rhs) const
@@ -470,7 +470,7 @@ namespace pgl
 
   bool Group::FDRecvTask::receive()
   {
-    if (_max_duration_usec != 0 && timeout()) {
+    if (timeout()) {
       throw std::runtime_error("recv timeout");
     }
     if (receiveData()) {
@@ -569,7 +569,7 @@ namespace pgl
 
   bool Group::FDSendTask::send()
   {
-    if (_max_duration_usec != 0 && timeout()) {
+    if (timeout()) {
       throw std::runtime_error("send timeout");
     }
 
@@ -582,7 +582,9 @@ namespace pgl
 
   bool Group::FDSendTask::sendData()
   {
+    std::cerr << "sendData: w=" << _size_written << " t=" << _size_total << std::endl;
     if (_size_written == _size_total) {
+      std::cerr << "sendData: all sent" << std::endl;
       return true;
     }
 
@@ -610,14 +612,18 @@ namespace pgl
 
   bool Group::FDSendTask::sendFD()
   {
+    std::cerr << "sendFD" << std::endl;
     if (!_send_fd) {
+      std::cerr << "!_send_fd == true" << std::endl;
       return true;
     }
 
     if (writeFD(fd(), _fd, 0) != -1) {
       _send_fd = false;
+      std::cerr << "sendFD: sent" << std::endl;
       return true;
     } else {
+      std::cerr << "sendFD: write failed" << std::endl;
       return false;
     }
   }
@@ -638,10 +644,12 @@ namespace pgl
   Group::HeaderRecvTask::HeaderRecvTask(int fd, unsigned int usec_timeout)
     : Group::FDRecvTask(fd, &_header, sizeof(Message::Header), usec_timeout)
   {
+    std::cerr << "Creating HeaderRecvTask" << std::endl;
   }
 
   bool Group::HeaderRecvTask::process(Group& group)
   {
+    std::cerr << "Processing HeaderRecvTask" << std::endl;
     //
     // TODO: check sender pid
     // TODO: check size limits
@@ -664,20 +672,23 @@ namespace pgl
     : Group::FDRecvTask(fd, nullptr, 0, usec_timeout),
       _msg(header)
   {
+    std::cerr << "Creating MessageRecvTask" << std::endl;
     setReceiveBuffer(_msg.dataWritable());
     setReceiveSize(_msg.dataSize());
     if (header.type == Message::Type::M2M_FD) {
       setReceiveFD();
+      std::cerr << "MessageRecvTask with fd" << std::endl;
     }
   }
 
   bool Group::MessageRecvTask::process(Group& group)
   {
+    std::cerr << "Processing MessageRecvTask" << std::endl;
     if (_msg.getTypeUnsafe() == Message::Type::M2M_FD) {
       _msg.setFD(getFD());
+      std::cerr << "MessageRecvTask has fd" << std::endl;
     }
-
-    group.masterHandleBusMessage(_msg, fd());
+    group.masterHandleBusMessage(std::move(_msg), fd());
     return true;
   }
 
@@ -687,14 +698,16 @@ namespace pgl
   //
   /////
 
-  Group::MessageSendTask::MessageSendTask(int fd, Message& msg, unsigned int usec_timeout)
+  Group::MessageSendTask::MessageSendTask(int fd, Message&& msg, unsigned int usec_timeout)
     : Group::FDSendTask(fd, nullptr, 0, usec_timeout),
       _msg(std::move(msg))
   {
+    std::cerr << "Creating a MessageSendTask: buffer_size=" << _msg.bufferSize() << std::endl;
     setSendBuffer(_msg.buffer());
     setSendSize(_msg.bufferSize());
     if (_msg.getType() == Message::Type::M2M_FD) {
       setSendFD(_msg.getFD());
+      std::cerr << "MessageSendTask with fd" << std::endl;
     }
   }
 
