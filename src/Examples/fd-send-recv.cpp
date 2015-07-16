@@ -24,7 +24,7 @@ public:
       std::string message;
       const pid_t peer_pid = messageBusRecv(-1, message);
       /* open fd */
-      const int fd = open(message.c_str(), O_WRONLY|O_CREAT);
+      const int fd = open(message.c_str(), O_WRONLY|O_CREAT, S_IRWXU);
 
       if (fd == -1) {
 	abort();
