@@ -2,9 +2,17 @@
 
 A C++ library that provides an API which simplifies the task of process isolation implementation
 
-## Goal
+## Goals
 
-The goal is to develop a library that provides a C++ API which allows an application creator to define a group of interconnected processes and build the application using these processes. The library takes care of creating the processes, setting up the communication channels and handling the message routing. This is useful either from a security point of view, as each process can be stripped off priviledges to a minimal required set, or from a reliability point of view, because if a process in a group of separated processes crashes, it won't unexpectedly terminate the other processes.
+### Primary goal
+
+The primary goal is to develop a library that provides a C++ API which allows an application creator to define a group of interconnected processes and build the application using these processes. The library takes care of creating the processes, setting up the communication channels and handling the message routing and delivery. This is useful either from a security point of view, as each process can be stripped off priviledges to a minimal required set, or from a reliability point of view, because if a process in a group of separated processes crashes, it won't unexpectedly terminate the other processes.
+
+### Secondary goals
+
+* Provide a pre-implemented set of common processes with documented interfaces (e.g. an "ssh-agent" like process, a server process, command execution process, etc.)
+
+* Experiment with support for monitoring process statistics and analysing process behaviour for anomalies.
 
 ## Status
 
