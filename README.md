@@ -39,19 +39,36 @@ From inside that function, you can call API functions to comminucate with other 
 void messageBusSend(pid_t peer_pid, const std::string& msg);
 ```
  * __messageBusSend__.
-  Send a message stored in `msg` to a process with PID `peer_pid`. The `peer_pid` can be set to `-1` to indicate, that the message should be sent to all processes in the group.
+  Send a message stored in `msg` to a process with PID `peer_pid`. The `peer_pid` can be set to `-1` to indicate, that the message should be sent to all running processes in the group.
+
 
 ```c++
 pid_t messageBusRecv(pid_t peer_pid, std::string& msg);
 ```
 * __messageBusRecv__.
-  Receive a message from process with PID `peer_pid` and store it in `msg`. The `peer_pid` can be set to `-1` to indicate, that the message can be received from any processes from the group.
+  Receive a message from process with PID `peer_pid` and store it in `msg`. The `peer_pid` can be set to `-1` to indicate that the message can be received from any processes from the group.
+
 
 ```c++
 pid_t messageBusSendRecv(pid_t peer_pid, const std::string& msg, std::string& msg_reply);
 ```
 * __messageBusSendRecv__.
   Send a message stored in `msg` to a process with PID `peer_pid`, wait for a reply and store it in `msg_reply`.
+
+
+```c++
+void messageBusSendFD(pid_t peer_pid, int fd, const std::string& message = "");
+```
+* __messageBusSendFD__.
+  Send a message with a file descriptor `fd` to a process with PID `peer_pid`. The `peer_pid` can be set to `-1` to indicate, that the message should be sent to all running processes in the group.
+
+
+```c++
+pid_t messageBusRecvFD(pid_t peer_pid, int *fd, std::string *message = nullptr);
+```
+* __messageBusRecvFD__.
+  Receive a message with a file descriptor from a process with PID `peer_pid`. The `peer_pid` can be set to `-1` to indicate that the message can be received from any process from the group. If a non-NULL pointer to a `std::string` object is provided in `message`, then the message sent along with the fd will be stored there.
+
 
 If you want to send a message to a specific process, first you have to resolve its name to its current PID. You can do that by using:
 
@@ -61,12 +78,13 @@ pid_t messageBusResolve(const std::string& name);
 * __messageBusResolve__.
   Resolve a string identifier of a member of the group to the PID of a running process with that identifier. If there's no active process with such a name, `-1` is returned.
 
+
 ```c++
 int messageBusWait(unsigned int max_wait_usec = 0);
 ```
-
 * __messageBusWait__.
   Wait for a message. The `max_wait_usec` parameter specifies how long, in microseconds, to wait for a message to appear on the bus. If set to 0, the call will block until a message is available or until the wait is interrupted by an external event (e.g. signal). If a message is available, 1 is returned. On interruption, -1 is returned. If `max_wait_usec` is non-zero and the timeout expired, 0 is returned.
+
 
 ### pgl::Group
 
