@@ -1,65 +1,51 @@
 #pragma once
+#include <stdexcept>
 
 namespace pgl
 {
-  class MessageBusError
+  class Exception : public std::exception
   {
-  public:
-    enum Code {
-      TimeoutRecv,
-      TimeoutSend,
-      MessageInvalid,
-      LimitExceeded
-    };
-
-    MessageBusError(pid_t pid, Code code, const std::string& message)
-      : _pid(pid),
-	_code(code),
-	_message(message)
-    {
-    }
-    pid_t pid() const
-    {
-      return _pid;
-    }
-    Code code() const
-    {
-      return _code;
-    }
-    const std::string& message() const
-    {
-      return _message;
-    }
-  private:
-    const pid_t _pid; /**< who caused the error */
-    const Code _code;
-    const std::string _message;
   };
 
-  class ProcessError
+  /**
+   * Message Bus Exception class.
+   *
+   * Methods that interact with the message bus throw this
+   * exception type when they cannot continue operating as
+   * expected.
+   *
+   * Methods that throw this exception set the `recoverable'
+   * flag to indicate that calling the method again is
+   * possible and might result in completion of the requested
+   * operation.
+   */
+  class BusError : public Exception
   {
-  public:
-    ProcessError(pid_t pid, int code, const std::string& message = "")
-      : _pid(pid),
-	_code(code),
-	_message(message)
-    {
-    }
-    pid_t pid() const
-    {
-      return _pid;
-    }
-    int code() const
-    {
-      return _code;
-    }
-    const std::string& message() const
-    {
-      return _message;
-    }
-  private:
-    const pid_t _pid;
-    const int _code;
-    const std::string _message;
+    public:
+      BusError(bool recoverable)
+      {
+        setRecoverable(recoverable);
+      }
+
+      const char *what() const
+      {
+        return "pgl::BusError";
+      }
+
+      bool isRecoverable() const
+      {
+        return _recoverable;
+      }
+
+      void setRecoverable(bool recoverable)
+      {
+        _recoverable = recoverable;
+        return;
+      }
+    private:
+      bool _recoverable;
   };
+
+  //
+
 } /* namespace pgl */

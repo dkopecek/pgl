@@ -264,7 +264,7 @@ namespace pgl
       }
     } while(!timeout);
 
-    throw std::runtime_error("recv timeout");
+    throw BusError(/*recoverable=*/true); // XXX: message text?
   }
 
   Message Process::messageBusRecvMessage(bool lock_bus)
@@ -323,7 +323,7 @@ namespace pgl
   pid_t Process::messageBusRecvFD(pid_t peer_pid, int *fd, std::string *message)
   {
     if (fd == nullptr) {
-      throw std::runtime_error("fd pointer null");
+      throw std::invalid_argument("messageBusRecvFD: fd == nullptr");
     }
 
     Message msg = std::move(messageBusRecvMessage(Message::Type::M2M_FD));
@@ -410,7 +410,7 @@ namespace pgl
       prepareMemberEnvVariables(exec_env);
 
       if (exec_env == nullptr) {
-	throw std::runtime_error("BUG: invalid environment");
+	throw std::invalid_argument("spawn: exec_env == nullptr");
       }
 
       if (_closeall_fds > 0) {
@@ -501,15 +501,16 @@ namespace pgl
 	 */
 	if (errno == EWOULDBLOCK || errno == EAGAIN || errno == EINTR) {
 	  if (timeout) {
-	    throw std::runtime_error("write operation takes too long");
+	    throw BusError(/*recoverable=*/true);
 	  }
 	  else {
 	    /* There's still time, try to write again */
+      // XXX: Add a sleep here
 	    continue;
 	  }
 	}
 	else {
-	  throw std::runtime_error("messageBusWrite failed");
+	  throw std::system_error(errno, std::system_category());
 	}
       }
       else {
@@ -541,7 +542,7 @@ namespace pgl
 	 */
 	if (errno == EWOULDBLOCK || errno == EAGAIN || errno == EINTR) {
 	  if (timeout) {
-	    throw std::runtime_error("read operation takes too long");
+	    throw BusError(/*recoverable=*/true);
 	  }
 	  else {
 	    /* There's still time, try to read again */
@@ -549,11 +550,11 @@ namespace pgl
 	  }
 	}
 	else {
-	  throw std::runtime_error("messageBusRead failed");
+	  throw std::system_error(errno, std::system_category());
 	}
       }
       else if (size_read == 0) {
-	throw std::runtime_error("fd closed");
+	throw BusError(/*recoverable=*/false);
       }
       else {
 	/* 
@@ -599,6 +600,7 @@ namespace pgl
 	throw std::system_error(errno, std::system_category());
       }
       else if (waitpid_ret == 0) {
+        // XXX: Add a sleep here
 	continue;
       }
       else {
@@ -628,7 +630,7 @@ namespace pgl
     case Message::Type::BUS_HEARTBEAT:
       break;
     default:
-      throw std::runtime_error("Cannot enqueue message of the given type");
+      throw std::runtime_error("BUG: messageBusRecvEnqueue: unhandled message type");
     }
     const unsigned int n = (unsigned int)msg.getType() % Message::type_count;
     std::unique_lock<std::mutex> bus_lock(_bus_rfd_mutex);
@@ -647,7 +649,7 @@ namespace pgl
     }
 
     if (_bus_recv_queue[n].empty()) {
-      throw std::runtime_error("Nothing to dequeue!");
+      throw std::runtime_error("BUG: messageBusRecvDequeue: dequeue attempt on an empty queue");
     }
 
     Message msg = std::move(_bus_recv_queue[n].front());
