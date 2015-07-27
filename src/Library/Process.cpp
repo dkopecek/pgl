@@ -17,6 +17,7 @@
 // Authors: Daniel Kopecek <dkopecek@redhat.com>
 //
 #include "Process.hpp"
+#include "Exception.hpp"
 #include "Message.hpp"
 #include "Timeout.hpp"
 #include "Utility.hpp"
@@ -323,7 +324,7 @@ namespace pgl
   pid_t Process::messageBusRecvFD(pid_t peer_pid, int *fd, std::string *message)
   {
     if (fd == nullptr) {
-      throw std::invalid_argument("messageBusRecvFD: fd == nullptr");
+      throw std::invalid_argument("BUG: messageBusRecvFD: fd == nullptr");
     }
 
     Message msg = std::move(messageBusRecvMessage(Message::Type::M2M_FD));
@@ -630,7 +631,7 @@ namespace pgl
     case Message::Type::BUS_HEARTBEAT:
       break;
     default:
-      throw std::runtime_error("BUG: messageBusRecvEnqueue: unhandled message type");
+      throw std::invalid_argument("BUG: messageBusRecvEnqueue: unhandled message type");
     }
     const unsigned int n = (unsigned int)msg.getType() % Message::type_count;
     std::unique_lock<std::mutex> bus_lock(_bus_rfd_mutex);

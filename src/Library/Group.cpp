@@ -17,6 +17,7 @@
 // Authors: Daniel Kopecek <dkopecek@redhat.com>
 //
 #include "Group.hpp"
+#include "Exception.hpp"
 #include "Process.hpp"
 #include "Utility.hpp"
 #include <sys/signalfd.h>
@@ -36,10 +37,10 @@ namespace pgl
       _process_argv(argv)
   {
     if (argc < 1 || argv == nullptr) {
-      throw std::runtime_error("Invalid argc, argv[] parameter values");
+      throw std::invalid_argument("BUG: Group ctor: invalid argc/argv[] parameter values");
     }
     if (argv[0] == nullptr) {
-      throw std::runtime_error("argv[0] is NULL");
+      throw std::invalid_argument("BUG: Group ctor: argv[0] == nullptr");
     }
 
     //
@@ -51,7 +52,7 @@ namespace pgl
 					   path_buffer, sizeof path_buffer);
 
     if (path_length == -1) {
-      throw std::runtime_error("Cannot get executable path of the current process");
+      throw std::system_error(errno, std::system_category());
     }
 
     const std::string exec_path(path_buffer, path_length);
@@ -84,7 +85,7 @@ namespace pgl
       sigdelset(&mask, SIGBUS);
     
       if ((_signal_fd = signalfd(-1, &mask, SFD_NONBLOCK|SFD_CLOEXEC)) == -1) {
-	throw std::runtime_error("Cannot create signal fd");
+        throw std::runtime_error("Cannot create signal fd");
       }
     }
     else {
@@ -346,7 +347,7 @@ namespace pgl
 	masterPIDLookupReply(std::move(msg), from_fd);
 	break;
       default:
-	throw std::runtime_error("Unknown message type");
+	throw std::invalid_argument("BUG: masterHandleBusMessage: unhandled message type");
       }
 
     return;

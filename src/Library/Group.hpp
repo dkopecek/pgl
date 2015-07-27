@@ -20,6 +20,7 @@
 
 #include "Process.hpp"
 #include "Timeout.hpp"
+#include "Exception.hpp"
 #include <string>
 #include <map>
 #include <queue>
