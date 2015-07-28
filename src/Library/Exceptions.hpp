@@ -46,6 +46,31 @@ namespace pgl
       bool _recoverable;
   };
 
-  //
+  class SyscallError : public Exception
+  {
+    public:
+      SyscallError(const std::string& syscall, int error)
+        : _syscall(syscall), _error(error)
+      {
+      }
+
+      const char *what() const
+      {
+        return "pgl::SyscallError";
+      }
+
+      const std::string& syscall() const
+      {
+        return _syscall;
+      }
+
+      int error() const
+      {
+        return _error;
+      }
+    private:
+      const std::string _syscall;
+      const int _error;
+  };
 
 } /* namespace pgl */

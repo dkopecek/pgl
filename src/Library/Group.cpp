@@ -52,7 +52,7 @@ namespace pgl
 					   path_buffer, sizeof path_buffer);
 
     if (path_length == -1) {
-      throw std::system_error(errno, std::system_category());
+      throw SyscallError("readlink", errno);
     }
 
     const std::string exec_path(path_buffer, path_length);
@@ -83,9 +83,9 @@ namespace pgl
       sigdelset(&mask, SIGILL);
       sigdelset(&mask, SIGFPE);
       sigdelset(&mask, SIGBUS);
-    
+
       if ((_signal_fd = signalfd(-1, &mask, SFD_NONBLOCK|SFD_CLOEXEC)) == -1) {
-        throw std::runtime_error("Cannot create signal fd");
+        throw SyscallError("signalfd", errno);
       }
     }
     else {
