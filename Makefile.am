@@ -39,7 +39,8 @@ pkginclude_HEADERS=\
 	src/Library/Group.hpp \
 	src/Library/Process.hpp \
 	src/Library/Message.hpp \
-	src/Library/pgl.hpp
+	src/Library/pgl.hpp \
+	src/Library/Exceptions.hpp
 
 bin_PROGRAMS=\
 	test \
