@@ -49,7 +49,7 @@ namespace pgl
     //
     char path_buffer[PATH_MAX];
     const ssize_t path_length = ::readlink("/proc/self/exe",
-					   path_buffer, sizeof path_buffer);
+        path_buffer, sizeof path_buffer);
 
     if (path_length == -1) {
       throw SyscallError("readlink", errno);
@@ -121,10 +121,10 @@ namespace pgl
     try {
       std::unique_lock<std::mutex> map_lock(_process_map_mutex);
       for (auto& process_entry : _process_by_name) {
-	auto process = process_entry.second;
-	pid_t pid = process->spawn(_process_argc, _process_argv);
-	process->setPID(pid);
-	_process_by_pid[pid] = process;
+        auto process = process_entry.second;
+        pid_t pid = process->spawn(_process_argc, _process_argv);
+        process->setPID(pid);
+        _process_by_pid[pid] = process;
       }
     }
     catch(const std::exception& ex) {
@@ -138,13 +138,13 @@ namespace pgl
     for (auto& process_entry : _process_by_pid) {
       auto process = process_entry.second;
       try {
-	process->stop();
+        process->stop();
       } catch(const std::exception& ex) {
-	process->kill();
+        process->kill();
       }
     }
   }
-  
+
   //
   // TODO: Refactor the mess in the method below
   //
@@ -169,26 +169,26 @@ namespace pgl
       max_fd = _signal_fd;
 
       for (auto const& map_entry : _process_by_pid) {
-	auto const& process = map_entry.second;
-	int fd = -1;
-	process->getMessageBusFDs(&fd, nullptr);
-	if (fd == -1) {
-    throw PGL_BUG("getMessageBusFDs method returned an invalid fd");
-	}
+        auto const& process = map_entry.second;
+        int fd = -1;
+        process->getMessageBusFDs(&fd, nullptr);
+        if (fd == -1) {
+          throw PGL_BUG("getMessageBusFDs method returned an invalid fd");
+        }
 
-	max_fd = std::max(max_fd, fd);
-	max_rfd = std::max(max_rfd, fd);
+        max_fd = std::max(max_fd, fd);
+        max_rfd = std::max(max_rfd, fd);
 
-	FD_SET(fd, &rd_set);
+        FD_SET(fd, &rd_set);
       }
 
       for (auto const& map_entry : _tasks_wr) {
-	auto const& queue = map_entry.second;
-	if (queue.size() > 0) {
-	  const int fd = map_entry.first;
-	  max_fd = std::max(max_fd, fd);
-	  FD_SET(fd, &wr_set);
-	}
+        auto const& queue = map_entry.second;
+        if (queue.size() > 0) {
+          const int fd = map_entry.first;
+          max_fd = std::max(max_fd, fd);
+          FD_SET(fd, &wr_set);
+        }
       }
 
       /*
@@ -197,75 +197,75 @@ namespace pgl
       const int nfds = select(max_fd + 1, &rd_set, &wr_set, nullptr, &tv_timeout);
 
       if (nfds == -1) {
-	return;
+        return;
       }
       else if (nfds == 0) {
-	continue;
+        continue;
       }
 
       /*
        * Handle signals first
        */
       if (FD_ISSET(_signal_fd, &rd_set)) {
-	masterReceiveSignal();
-	FD_CLR(_signal_fd, &rd_set);
+        masterReceiveSignal();
+        FD_CLR(_signal_fd, &rd_set);
       }
 
       /*
        * Handle writes before reads to free some memory
        */
       for (auto it = _tasks_wr.begin(); it != _tasks_wr.end(); ) {
-	const int fd = it->first;
+        const int fd = it->first;
 
-	if (FD_ISSET(fd, &wr_set)) {
-	  auto& queue = it->second;
+        if (FD_ISSET(fd, &wr_set)) {
+          auto& queue = it->second;
 
-	  if (queue.empty()) {
-	    ++it;
-	    continue;
-	  }
+          if (queue.empty()) {
+            ++it;
+            continue;
+          }
 
-	  auto& task = queue.front();
-	  assert(task->fd() == fd);
+          auto& task = queue.front();
+          assert(task->fd() == fd);
 
-	  if (task->run(*this)) {
-	    queue.pop();
-	  }
+          if (task->run(*this)) {
+            queue.pop();
+          }
 
-	  if (queue.empty()) {
-	    it = _tasks_wr.erase(it);
-	    continue;
-	  }
-	}
+          if (queue.empty()) {
+            it = _tasks_wr.erase(it);
+            continue;
+          }
+        }
 
-	++it;
+        ++it;
       } /* write task loop end */
 
       /* Handle reads */
       for (int fd = 0; fd <= max_rfd; ++fd) {
-	if (FD_ISSET(fd, &rd_set)) {
-	  if (_tasks_rd.count(fd) == 0) {
-	    /* Create a new RecvHeaderTask */
-	    masterReceiveHeader(fd);
-	  }
-	  else {
-	    /* Handle existing read task */
-	    auto& queue = _tasks_rd[fd];
+        if (FD_ISSET(fd, &rd_set)) {
+          if (_tasks_rd.count(fd) == 0) {
+            /* Create a new RecvHeaderTask */
+            masterReceiveHeader(fd);
+          }
+          else {
+            /* Handle existing read task */
+            auto& queue = _tasks_rd[fd];
 
-	    if (queue.empty()) {
-	      continue;
-	    }
+            if (queue.empty()) {
+              continue;
+            }
 
-	    auto& task = queue.front();
-	    
-	    if (task->run(*this)) {
-	      queue.pop();
-	      if (queue.empty()) {
-		_tasks_rd.erase(fd);
-	      }
-	    }
-	  }
-	}
+            auto& task = queue.front();
+
+            if (task->run(*this)) {
+              queue.pop();
+              if (queue.empty()) {
+                _tasks_rd.erase(fd);
+              }
+            }
+          }
+        }
       } /* read fd loop */
 
     } /* select loop */
@@ -341,13 +341,13 @@ namespace pgl
       {
       case Message::Type::M2M:
       case Message::Type::M2M_FD:
-	masterRouteMessage(std::move(msg));
-	break;
+        masterRouteMessage(std::move(msg));
+        break;
       case Message::Type::BUS_PID_LOOKUP:
-	masterPIDLookupReply(std::move(msg), from_fd);
-	break;
+        masterPIDLookupReply(std::move(msg), from_fd);
+        break;
       default:
-	throw std::invalid_argument("BUG: masterHandleBusMessage: unhandled message type");
+        throw std::invalid_argument("BUG: masterHandleBusMessage: unhandled message type");
       }
 
     return;
@@ -493,7 +493,7 @@ namespace pgl
 
     if (size_read < 0) {
       if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
-	return false;
+        return false;
       }
       else {
         throw BusError(/*recoverable=*/true);
@@ -596,7 +596,7 @@ namespace pgl
 
     if (size_write < 0) {
       if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
-	return false;
+        return false;
       }
       else {
         throw BusError(/*recoverable=*/false);

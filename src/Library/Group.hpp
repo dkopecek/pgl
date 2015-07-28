@@ -38,32 +38,32 @@ namespace pgl
   {
   public:
     Group(int argc, char *argv[]);
- 
+
     template<class T>
     void addProcess(const std::string& name)
     {
       static_assert(std::is_base_of<Process, T>::value,
-		    "T must be derived from pgl::Process");
+          "T must be derived from pgl::Process");
 
       std::unique_lock<std::mutex> map_lock(_process_map_mutex);
 
       if (_master_mode) {
-	/*
-	 * The masterAddProcess method creates a Process instance for
-	 * every process added to the group. The instance is put into
-	 * an Process::Initialized state and is ready for spawning the
-	 * real process by the Group::run() method.
-	 */
-	masterAddProcess<T>(name);
+        /*
+         * The masterAddProcess method creates a Process instance for
+         * every process added to the group. The instance is put into
+         * an Process::Initialized state and is ready for spawning the
+         * real process by the Group::run() method.
+         */
+        masterAddProcess<T>(name);
       }
       else {
-	/*
-	 * We are in a child process of the master. The memberAddProcess
-	 * method will create a new instance of the process class iff
-	 * it's the one that matches the requested one in argv[0]. Other
-	 * requests will be ignored.
-	 */
-	memberAddProcess<T>(name);
+        /*
+         * We are in a child process of the master. The memberAddProcess
+         * method will create a new instance of the process class iff
+         * it's the one that matches the requested one in argv[0]. Other
+         * requests will be ignored.
+         */
+        memberAddProcess<T>(name);
       }
 
       return;
@@ -188,9 +188,9 @@ namespace pgl
        * class of the process that's being added.
        */
       if (map_entry_it != _process_by_name.end()) {
-	if (!std::dynamic_pointer_cast<T>(map_entry_it->second)) {
-	  throw std::runtime_error("Cannot add process: procesees with a shared name have to be of the same class");
-	}
+        if (!std::dynamic_pointer_cast<T>(map_entry_it->second)) {
+          throw std::runtime_error("Cannot add process: procesees with a shared name have to be of the same class");
+        }
       }
 
       auto derived_ptr = std::make_shared<T>();
@@ -211,12 +211,12 @@ namespace pgl
     void memberAddProcess(const std::string& name)
     {
       if (_member_instantiated) {
-	/* Ignore: already instantiated */
-	return;
+        /* Ignore: already instantiated */
+        return;
       }
       if (_requested_name != name) {
-	/* Ignore: this class is not the requested one */
-	return;
+        /* Ignore: this class is not the requested one */
+        return;
       }
 
       auto derived_ptr = std::make_shared<T>();

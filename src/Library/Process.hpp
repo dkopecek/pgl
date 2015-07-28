@@ -41,12 +41,12 @@ namespace pgl
   public:
     enum State
       {
-	Initialized, /**< Never started; This state is set for new instances */
-	Running, /**< The process is considered to be running */
-	Finished, /**< The process finished execution without any intervention from the master process */
-	Terminated, /**< The process was terminated by the master process */
-	Failed, /**< A failure caused the process to not start/or terminate */
-	Invalid /**< The instance is in invalid/unusable state */
+        Initialized, /**< Never started; This state is set for new instances */
+        Running, /**< The process is considered to be running */
+        Finished, /**< The process finished execution without any intervention from the master process */
+        Terminated, /**< The process was terminated by the master process */
+        Failed, /**< A failure caused the process to not start/or terminate */
+        Invalid /**< The instance is in invalid/unusable state */
       };
 
     Process();
@@ -123,7 +123,7 @@ namespace pgl
      * then any message addressed to this process will be recevied.
      * Otherwise, the sending process PID has to match the value
      * of peer_pid.
-     * 
+     *
      * Returns -1 when no message was received. Otherwise, the PID
      * of the sending process is returned. An exception is thrown
      * on failure.
@@ -156,7 +156,7 @@ namespace pgl
     // whether the source side still operates as expected
     // (i.e. it's not sending random garbage that doesn't
     //  make sense)
-    // 
+    //
     // When sending a message, the sending side has to
     // compute a hash value, and include a random byte from
     // that hash in the message. The position of the selected
@@ -212,7 +212,7 @@ namespace pgl
 
     std::mutex _bus_wfd_mutex;
     int _bus_wfd;
-  
+
     std::mutex _bus_rfd_mutex;
     int _bus_rfd;
 

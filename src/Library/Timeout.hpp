@@ -41,7 +41,7 @@ namespace pgl
       }
 
       if (tsUsecDiff(ts_now, _ts_start) >= _usec_timeout) {
-	return true;
+        return true;
       }
 
       return false;
@@ -56,7 +56,7 @@ namespace pgl
       const uint64_t ns_abs_a = ts_a.tv_sec * 1000 * 1000 * 1000 + ts_a.tv_nsec;
       const uint64_t ns_abs_b = ts_b.tv_sec * 1000 * 1000 * 1000 + ts_b.tv_nsec;
       const uint64_t ns_diff = (ns_abs_a > ns_abs_b ?
-				ns_abs_a - ns_abs_b : ns_abs_b - ns_abs_a);
+          ns_abs_a - ns_abs_b : ns_abs_b - ns_abs_a);
       return ns_diff / 1000;
     }
 

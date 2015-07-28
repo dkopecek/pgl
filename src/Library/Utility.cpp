@@ -29,7 +29,7 @@
 namespace pgl
 {
   void closeAllFDs(int from_fd)
-  { 
+  {
     int fd_max = 1024;
     struct rlimit limit;
 

@@ -85,7 +85,7 @@ namespace pgl
     {
 #if __GNUC__ >= 5
       static_assert(std::is_trivially_copyable<T>::value == true,
-		    "type is not trivially copyable");
+          "type is not trivially copyable");
 #endif
       const size_t size = sizeof(T);
 
@@ -98,13 +98,13 @@ namespace pgl
       copyToData(ptr, size);
       return;
     }
- 
+
     template<typename T>
     void copyFromData(T& copyable) const
     {
 #if __GNUC__ >= 5
       static_assert(std::is_trivially_copyable<T>::value == true,
-		    "type is not trivially copyable");
+          "type is not trivially copyable");
 #endif
       const size_t size = sizeof(T);
 
@@ -143,7 +143,7 @@ namespace pgl
     {
       return reinterpret_cast<const uint8_t*>(_data_ptr);
     }
-    
+
     uint8_t *dataWritable()
     {
       return reinterpret_cast<uint8_t*>(_data_ptr);

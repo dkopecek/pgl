@@ -167,7 +167,7 @@ namespace pgl
 
     struct timeval tv_timeout = { 0, max_wait_usec };
     const int nfds = select(fd + 1, &rd_set, nullptr, nullptr,
-			    max_wait_usec > 0 ? &tv_timeout : nullptr);
+        max_wait_usec > 0 ? &tv_timeout : nullptr);
 
     return nfds;
   }
@@ -258,10 +258,10 @@ namespace pgl
     do {
       Message msg = std::move(messageBusRecvMessage(/*lock_bus=*/false));
       if (msg.getType() == type) {
-	return std::move(msg);
+        return std::move(msg);
       }
       else {
-	messageBusRecvEnqueue(std::move(msg));
+        messageBusRecvEnqueue(std::move(msg));
       }
     } while(!timeout);
 
@@ -279,7 +279,7 @@ namespace pgl
     /* Read message header */
     Message::Header header;
     messageBusRead(_bus_rfd, reinterpret_cast<uint8_t *>(&header),
-		   sizeof(Message::Header), 60 * 1000 * 1000); // XXX: hard-coded timeout
+        sizeof(Message::Header), 60 * 1000 * 1000); // XXX: hard-coded timeout
 
     /* Check reply_header.size value */
     Message msg(header);
@@ -342,14 +342,14 @@ namespace pgl
 
     return msg.getFrom();
   }
-  
+
   // NOTE: Add a sanity field. 
   //
   // Sanity field serves for the receiving side to know
   // whether the source side still operates as expected
   // (i.e. it's not sending random garbage that doesn't
   //  make sense)
-  // 
+  //
   // When sending a message, the sending side has to
   // compute a hash value, and include a random byte from
   // that hash in the message. The position of the selected
@@ -372,7 +372,7 @@ namespace pgl
     }
 
     if (fcntl(bus_fd[0], F_SETFL, O_NONBLOCK) != 0 ||
-	fcntl(bus_fd[1], F_SETFL, O_NONBLOCK) != 0) {
+        fcntl(bus_fd[1], F_SETFL, O_NONBLOCK) != 0) {
       throw SyscallError("fcntl(fd, F_SETFL, O_NONBLOCK)", errno);
     }
 
@@ -419,7 +419,7 @@ namespace pgl
       }
 
       if (_closeall_fds > 0) {
-	closeAllFDs(/*from_fd=*/3 + _closeall_fds);
+        closeAllFDs(/*from_fd=*/3 + _closeall_fds);
       }
 
       preExecSetup();
@@ -457,7 +457,7 @@ namespace pgl
     for (auto const& name : _keep_env) {
       const char * const val = getenv(name.c_str());
       if (val == nullptr) {
-	continue;
+        continue;
       }
       std::string var = name + "=" + val;
       env_array[env_index] = strdup(var.c_str());
@@ -500,32 +500,32 @@ namespace pgl
       const ssize_t size_write = write(fd, data, size);
 
       if (size_write < 0) {
-	/*
-	 * Error. Check whether it's only a temporary
-	 * and if we have time for another try.
-	 */
-	if (errno == EWOULDBLOCK || errno == EAGAIN || errno == EINTR) {
-	  if (timeout) {
-	    throw BusError(/*recoverable=*/true);
-	  }
-	  else {
-	    /* There's still time, try to write again */
-      // XXX: Add a sleep here
-	    continue;
-	  }
-	}
-	else {
-    throw SyscallError("write", errno);
-	}
+        /*
+         * Error. Check whether it's only a temporary
+         * and if we have time for another try.
+         */
+        if (errno == EWOULDBLOCK || errno == EAGAIN || errno == EINTR) {
+          if (timeout) {
+            throw BusError(/*recoverable=*/true);
+          }
+          else {
+            /* There's still time, try to write again */
+            // XXX: Add a sleep here
+            continue;
+          }
+        }
+        else {
+          throw SyscallError("write", errno);
+        }
       }
       else {
-	/* 
-	 * At least one byte was written, update data
-	 * pointer and size for next write...
-	 */
-	size_written += size_write;
-	size -= size_write;
-	data += size_write;
+        /*
+         * At least one byte was written, update data
+         * pointer and size for next write...
+         */
+        size_written += size_write;
+        size -= size_write;
+        data += size_write;
       }
     } /* while loop */
 
@@ -541,34 +541,34 @@ namespace pgl
       const ssize_t size_read = read(fd, data, size);
 
       if (size_read < 0) {
-	/*
-	 * Error. Check whether it's only a temporary
-	 * and if we have time for another try.
-	 */
-	if (errno == EWOULDBLOCK || errno == EAGAIN || errno == EINTR) {
-	  if (timeout) {
-	    throw BusError(/*recoverable=*/true);
-	  }
-	  else {
-	    /* There's still time, try to read again */
-	    continue;
-	  }
-	}
-	else {
-    throw SyscallError("read", errno);
-	}
+        /*
+         * Error. Check whether it's only a temporary
+         * and if we have time for another try.
+         */
+        if (errno == EWOULDBLOCK || errno == EAGAIN || errno == EINTR) {
+          if (timeout) {
+            throw BusError(/*recoverable=*/true);
+          }
+          else {
+            /* There's still time, try to read again */
+            continue;
+          }
+        }
+        else {
+          throw SyscallError("read", errno);
+        }
       }
       else if (size_read == 0) {
-	throw BusError(/*recoverable=*/false);
+        throw BusError(/*recoverable=*/false);
       }
       else {
-	/* 
-	 * At least one byte was written, update data
-	 * pointer and size for next write...
-	 */
-	size_stored += size_read;
-	size -= size_read;
-	data += size_read;
+        /*
+         * At least one byte was written, update data
+         * pointer and size for next write...
+         */
+        size_stored += size_read;
+        size -= size_read;
+        data += size_read;
       }
     } /* while loop */
 
@@ -599,14 +599,14 @@ namespace pgl
       const pid_t waitpid_ret = ::waitpid(pid, &pid_status, WNOHANG);
 
       if (waitpid_ret == pid) {
-	return;
+        return;
       }
       else if (waitpid_ret == -1) {
         throw SyscallError("waitpid", errno);
       }
       else if (waitpid_ret == 0) {
         // XXX: Add a sleep here
-	continue;
+        continue;
       }
       else {
         throw PGL_BUG("unhandled waitpid() return value");

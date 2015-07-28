@@ -130,7 +130,7 @@ namespace pgl
     }
     return _header_ptr->pid_from;
   }
-  
+
   void Message::setTo(pid_t pid)
   {
     if (_finalized) {
@@ -169,7 +169,7 @@ namespace pgl
   {
     return _header_ptr->type;
   }
-  
+
   void Message::setFD(int fd)
   {
     if (_finalized) {
