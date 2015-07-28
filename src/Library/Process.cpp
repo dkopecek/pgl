@@ -368,12 +368,12 @@ namespace pgl
     int bus_fd[2];
 
     if (socketpair(AF_LOCAL, SOCK_STREAM, 0, bus_fd) != 0) {
-      throw std::system_error(errno, std::system_category());
+      throw SyscallError("socketpair(AF_LOCAL, SOCK_STREAM)", errno);
     }
 
     if (fcntl(bus_fd[0], F_SETFL, O_NONBLOCK) != 0 ||
 	fcntl(bus_fd[1], F_SETFL, O_NONBLOCK) != 0) {
-      throw std::system_error(errno, std::system_category());
+      throw SyscallError("fcntl(fd, F_SETFL, O_NONBLOCK)", errno);
     }
 
     setMessageBusFDs(/*rfd=*/bus_fd[0], /*wfd=*/bus_fd[0]);
@@ -390,28 +390,32 @@ namespace pgl
       ::close(STDERR_FILENO);
       int null_fd = open("/dev/null", O_RDONLY);
       if (null_fd == -1) {
-	throw std::system_error(errno, std::system_category());
+        throw SyscallError("open(/dev/null, O_RDONLY)", errno);
       }
       if (::dup2(null_fd, STDERR_FILENO) == -1) {
-	::close(null_fd);
-	throw std::system_error(errno, std::system_category());
+        PGL_PROTECT_ERRNO {
+          ::close(null_fd);
+        }
+        throw SyscallError("dup2", errno);
       }
 #endif
       if (::dup2(bus_fd[1], STDIN_FILENO) == -1 ||
-	  ::dup2(bus_fd[1], STDOUT_FILENO) == -1) {
-	::close(bus_fd[1]);
-	throw std::system_error(errno, std::system_category());
+          ::dup2(bus_fd[1], STDOUT_FILENO) == -1) {
+        PGL_PROTECT_ERRNO {
+          ::close(bus_fd[1]);
+        }
+        throw SyscallError("dup2", errno);
       }
 
       if (prctl(PR_SET_PDEATHSIG, SIGTERM) == -1) {
-	throw std::system_error(errno, std::system_category());
+        throw SyscallError("prctl(PR_SET_PDEATHSIG)", errno);
       }
 
       char **exec_env = nullptr;
       prepareMemberEnvVariables(exec_env);
 
       if (exec_env == nullptr) {
-	throw std::invalid_argument("spawn: exec_env == nullptr");
+        throw PGL_API_ERROR("invalid argument: exec_env == nullptr");
       }
 
       if (_closeall_fds > 0) {
@@ -420,11 +424,11 @@ namespace pgl
 
       preExecSetup();
       ::execvpe(_exec_path.c_str(), argv, exec_env);
-      throw std::system_error(errno, std::system_category());
+      throw SyscallError("execvpe", errno);
     }
     else if (pid == -1) {
       /* fork() failure */
-      throw std::system_error(errno, std::system_category());
+      throw SyscallError("fork", errno);
     }
     /*-============= FORK  ===============- */
 
@@ -511,7 +515,7 @@ namespace pgl
 	  }
 	}
 	else {
-	  throw std::system_error(errno, std::system_category());
+    throw SyscallError("write", errno);
 	}
       }
       else {
@@ -551,7 +555,7 @@ namespace pgl
 	  }
 	}
 	else {
-	  throw std::system_error(errno, std::system_category());
+    throw SyscallError("read", errno);
 	}
       }
       else if (size_read == 0) {
@@ -587,7 +591,7 @@ namespace pgl
     }
     /* Send a termination request */
     if (::kill(pid, signal) != 0) {
-      throw std::system_error(errno, std::system_category());
+      throw SyscallError("kill", errno);
     }
     /* Wait for the child to exit */
     for (int usec_to_wait = 1000; usec_to_wait > 0; usec_to_wait -= 100) {
@@ -598,17 +602,17 @@ namespace pgl
 	return;
       }
       else if (waitpid_ret == -1) {
-	throw std::system_error(errno, std::system_category());
+        throw SyscallError("waitpid", errno);
       }
       else if (waitpid_ret == 0) {
         // XXX: Add a sleep here
 	continue;
       }
       else {
-	throw std::runtime_error("BUG: unhandled waitpid() return value");
+        throw PGL_BUG("unhandled waitpid() return value");
       }
     }
-    throw std::system_error(ETIMEDOUT, std::system_category());
+    throw SyscallError("waitpid", ETIMEDOUT);
   }
 
   uint8_t Process::expectedMessageHashBytePosition()
@@ -650,7 +654,7 @@ namespace pgl
     }
 
     if (_bus_recv_queue[n].empty()) {
-      throw std::runtime_error("BUG: messageBusRecvDequeue: dequeue attempt on an empty queue");
+      throw PGL_API_ERROR("cannot dequeue from an empty queue");
     }
 
     Message msg = std::move(_bus_recv_queue[n].front());

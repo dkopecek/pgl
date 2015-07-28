@@ -18,6 +18,7 @@
 //
 #pragma once
 
+#include "Exceptions.hpp"
 #include <string>
 #include <cstdint>
 #include <stddef.h>
@@ -89,7 +90,7 @@ namespace pgl
       const size_t size = sizeof(T);
 
       if (size != _header_ptr->size) {
-	throw std::runtime_error("copyToData: size mismatch");
+        throw PGL_API_ERROR("data size mismatch");
       }
 
       const void *ptr = static_cast<const void *>(&copyable);
@@ -108,7 +109,7 @@ namespace pgl
       const size_t size = sizeof(T);
 
       if (size != _header_ptr->size) {
-	throw std::runtime_error("copyFromData: size mismatch");
+        throw PGL_API_ERROR("data size mismatch");
       }
 
       void *ptr = static_cast<void *>(&copyable);
@@ -123,7 +124,7 @@ namespace pgl
     const uint8_t *buffer() const
     {
       if (!_finalized) {
-	throw std::runtime_error("buffer: cannot access message buffer of an incomplete message");
+        throw PGL_API_ERROR("cannot read message: not finalized");
       }
       return _buffer.get();
     }

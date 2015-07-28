@@ -17,7 +17,7 @@
 // Authors: Daniel Kopecek <dkopecek@redhat.com>
 //
 
-#include <stdexcept>
+#include "Exceptions.hpp"
 
 namespace pgl
 {
@@ -28,7 +28,7 @@ namespace pgl
       : _usec_timeout(usec)
     {
       if (clock_gettime(CLOCK_MONOTONIC, &_ts_start) != 0) {
-	throw std::runtime_error("clock_gettime failed");
+        throw SyscallError("clock_gettime(CLOCK_MONOTONIC)", errno);
       }
     }
 
@@ -37,7 +37,7 @@ namespace pgl
       struct timespec ts_now;
 
       if (clock_gettime(CLOCK_MONOTONIC, &ts_now) != 0) {
-	throw std::runtime_error("clock_gettime failed");
+        throw SyscallError("clock_gettime(CLOCK_MONOTONIC)", errno);
       }
 
       if (tsUsecDiff(ts_now, _ts_start) >= _usec_timeout) {

@@ -17,6 +17,7 @@
 // Authors: Daniel Kopecek <dkopecek@redhat.com>
 //
 #include "Message.hpp"
+#include "Exceptions.hpp"
 #include <cstring>
 
 namespace pgl
@@ -116,7 +117,7 @@ namespace pgl
   void Message::setFrom(pid_t pid)
   {
     if (_finalized) {
-      throw std::runtime_error("setFrom: cannot modify finalized message");
+      throw PGL_API_ERROR("cannot modify finalized message");
     }
     _header_ptr->pid_from = pid;
     return;
@@ -125,7 +126,7 @@ namespace pgl
   pid_t Message::getFrom() const
   {
     if (!_finalized) {
-      throw std::runtime_error("getFrom: cannot read from an incomplete message");
+      throw PGL_API_ERROR("cannot read message: not finalized");
     }
     return _header_ptr->pid_from;
   }
@@ -133,7 +134,7 @@ namespace pgl
   void Message::setTo(pid_t pid)
   {
     if (_finalized) {
-      throw std::runtime_error("setTo: cannot modify finalized message");
+      throw PGL_API_ERROR("cannot modify finalized message");
     }
     _header_ptr->pid_to = pid;
     return;
@@ -142,7 +143,7 @@ namespace pgl
   pid_t Message::getTo() const
   {
     if (!_finalized) {
-      throw std::runtime_error("getTo: cannot read from an incomplete message");
+      throw PGL_API_ERROR("cannot read message: not finalized");
     }
     return _header_ptr->pid_to;
   }
@@ -150,7 +151,7 @@ namespace pgl
   void Message::setType(Type type)
   {
     if (_finalized) {
-      throw std::runtime_error("setType: cannot modify finalized message");
+      throw PGL_API_ERROR("cannot modify finalized message");
     }
     _header_ptr->type = type;
     return;
@@ -159,7 +160,7 @@ namespace pgl
   Message::Type Message::getType() const
   {
     if (!_finalized) {
-      throw std::runtime_error("getType: cannot read from an incomplete message");
+      throw PGL_API_ERROR("cannot read message: not finalized");
     }
     return getTypeUnsafe();
   }
@@ -172,7 +173,7 @@ namespace pgl
   void Message::setFD(int fd)
   {
     if (_finalized) {
-      throw std::runtime_error("setFD: cannot modify finalized message");
+      throw PGL_API_ERROR("cannot modify finalized message");
     }
     setFDUnsafe(fd);
     return;
@@ -187,7 +188,7 @@ namespace pgl
   int Message::getFD() const
   {
     if (!_finalized) {
-      throw std::runtime_error("getFD: cannot read from an incomplete message");
+      throw PGL_API_ERROR("cannot read message: not finalized");
     }
     return _fd;
   }
@@ -195,7 +196,7 @@ namespace pgl
   void Message::finalize()
   {
     if (_finalized) {
-      throw std::runtime_error("Already finalized");
+      throw PGL_API_ERROR("already finalized");
     }
     _finalized = true;
     /* TODO: fill hbv and hbp */
@@ -211,19 +212,19 @@ namespace pgl
   void Message::copyToData(const std::string& strval)
   {
     if (_finalized) {
-      throw std::runtime_error("copyToData: cannot modify finalized message");
+      throw PGL_API_ERROR("cannot modify finalized message");
     }
 
     const size_t size = strval.size();
 
     if (size != _header_ptr->size) {
-      throw std::runtime_error("copyToData: size mismatch");
+      throw PGL_API_ERROR("data size mismatch");
     }
 
     const void *ptr = reinterpret_cast<const void *>(strval.c_str());
 
     if (ptr == nullptr) {
-      throw std::runtime_error("copyToData: invalid string");
+      throw PGL_API_ERROR("invalid string object");
     }
 
     copyToData(ptr, size);
@@ -233,7 +234,7 @@ namespace pgl
   void Message::copyFromData(std::string& strval) const
   {
     if (!_finalized) {
-      throw std::runtime_error("copyFromData: cannot copy data from an incomplete message");
+      throw PGL_API_ERROR("cannot read message: not finalized");
     }
     const char *ptr = static_cast<const char *>(_data_ptr);
     strval.assign(ptr, _header_ptr->size);
@@ -243,13 +244,13 @@ namespace pgl
   void Message::copyToData(const void *ptr, size_t size)
   {
     if (_finalized) {
-      throw std::runtime_error("copyToData: cannot modify finalized message");
+      throw PGL_API_ERROR("cannot modify finalized message");
     }
     if (ptr == nullptr) {
-      throw std::runtime_error("copyToData: invalid arguments");
+      throw PGL_API_ERROR("invalid argument");
     }
     if (size != _header_ptr->size) {
-      throw std::runtime_error("copyToData: size mismatch");
+      throw PGL_API_ERROR("data size mismatch");
     }
     memcpy(_data_ptr, ptr, size);
     return;
@@ -258,13 +259,13 @@ namespace pgl
   void Message::copyFromData(void *ptr, size_t size) const
   {
     if (!_finalized) {
-      throw std::runtime_error("copyFromData: cannot copy data from an incomplete message");
+      throw PGL_API_ERROR("cannot read message: not finalized");
     }
     if (ptr == nullptr) {
-      throw std::runtime_error("copyFromData: invalid arguments");
+      throw PGL_API_ERROR("invalid argument");
     }
     if (size != _header_ptr->size) {
-      throw std::runtime_error("copyFromDat: size mismatch");
+      throw PGL_API_ERROR("data size mismatch");
     }
     memcpy(ptr, _data_ptr, size);
     return;

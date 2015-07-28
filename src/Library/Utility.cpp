@@ -78,30 +78,28 @@ namespace pgl
       const ssize_t ret = sendmsg(bus_fd, &hdr, 0);
 
       if (ret != -1) {
-	/* The message was successfully sent */
-	return 0;
+        /* The message was successfully sent */
+        return 0;
       }
       else {
-	/*
-	 * An error happend, no data was sent. If the error is only
-	 * a temporary one and there's still time left, we try again.
-	 */
-	if (errno == EAGAIN || errno == EWOULDBLOCK) {
-	  if (timeout) {
-	    throw std::runtime_error("write operation takes too long");
-	  }
-	  else {
-	    continue;
-	  }
-	}
-	else {
-	  throw std::runtime_error("messageBusWriteFD: cannot send "
-				   "file descriptor to the bus: "
-				   + std::to_string(errno));
-	}
+        /*
+         * An error happend, no data was sent. If the error is only
+         * a temporary one and there's still time left, we try again.
+         */
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+          if (timeout) {
+            throw BusError(/*recoverable=*/true);
+          }
+          else {
+            // XXX add a sleep here */
+            continue;
+          }
+        }
+        else {
+          throw BusError(/*recoverable=*/false);
+        }
       }
     }
-
     return -1;
   }
 
@@ -127,32 +125,35 @@ namespace pgl
       const ssize_t ret = recvmsg(bus_fd, &hdr, 0);
 
       if (ret != -1) {
-	/* message received */
-	break;
+        /* message received */
+        break;
       }
       else {
-	if (errno == EAGAIN || errno == EWOULDBLOCK) {
-	  if (timeout) {
-	    throw std::runtime_error("read operation takes too long");
-	  }
-	  else {
-	    /* There's still time, try again */
-	    continue;
-	  }
-	}
-	else {
-	  throw ;
-	}
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+          if (timeout) {
+            throw BusError(/*recoverable=*/true);
+          }
+          else {
+            /* There's still time, try again */
+            // XXX: add a speel here */
+            continue;
+          }
+        }
+        else {
+          throw BusError(/*recoverable=*/false);
+        }
       }
     }
 
     const struct cmsghdr *cmsg = CMSG_FIRSTHDR(&hdr);
 
     if (cmsg == nullptr) {
-      throw std::runtime_error("Expected to receive control data in the message");
+      /* Error: excepted to receive control data in the message */
+      throw BusError(/*recoverable=*/false);
     }
     if (cmsg->cmsg_type != SCM_RIGHTS) {
-      throw std::runtime_error("Invalid control data type");
+      /* Error: invalid control data type */
+      throw BusError(/*recoverable=*/false);
     }
 
     /* XXX: check cmsg data length */

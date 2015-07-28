@@ -173,7 +173,7 @@ namespace pgl
 	int fd = -1;
 	process->getMessageBusFDs(&fd, nullptr);
 	if (fd == -1) {
-	  throw std::runtime_error("BUG: getMessageBusFDs() returned an invalid fd");
+    throw PGL_BUG("getMessageBusFDs method returned an invalid fd");
 	}
 
 	max_fd = std::max(max_fd, fd);
@@ -279,7 +279,7 @@ namespace pgl
 
     // NOTE: Tolerate EAGAIN, EINTR here?
     if (read(_signal_fd, &sig, sizeof sig) != sizeof sig) {
-      throw std::runtime_error("Failed to read signal info from signal fd");
+      throw SyscallError("read(_signal_fd)", errno);
     }
 
     return;
@@ -472,7 +472,7 @@ namespace pgl
   bool Group::FDRecvTask::receive()
   {
     if (timeout()) {
-      throw std::runtime_error("recv timeout");
+      throw BusError(/*recoverable=*/true);
     }
     if (receiveData()) {
       return receiveFD();
@@ -496,11 +496,12 @@ namespace pgl
 	return false;
       }
       else {
-	throw std::runtime_error("FDRecvTask failed");
+        throw BusError(/*recoverable=*/true);
       }
     }
     else if (size_read == 0) {
-      throw std::runtime_error("fd closed");
+      /* EOF */
+      throw BusError(/*recoverable=*/false);
     }
     else {
       _size_received += size_read;
@@ -571,7 +572,7 @@ namespace pgl
   bool Group::FDSendTask::send()
   {
     if (timeout()) {
-      throw std::runtime_error("send timeout");
+      throw BusError(/*recoverable=*/true);
     }
 
     if (sendData()) {
@@ -598,11 +599,12 @@ namespace pgl
 	return false;
       }
       else {
-	throw std::runtime_error("FDRecvTask failed");
+        throw BusError(/*recoverable=*/false);
       }
     }
     else if (size_write == 0) {
-      throw std::runtime_error("fd closed");
+      /* EOF */
+      throw BusError(/*recoverable=*/false);
     }
     else {
       _size_written += size_write;
