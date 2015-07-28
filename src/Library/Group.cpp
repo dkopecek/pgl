@@ -17,7 +17,7 @@
 // Authors: Daniel Kopecek <dkopecek@redhat.com>
 //
 #include "Group.hpp"
-#include "Exception.hpp"
+#include "Exceptions.hpp"
 #include "Process.hpp"
 #include "Utility.hpp"
 #include <sys/signalfd.h>

@@ -1,6 +1,6 @@
 #pragma once
 #include <stdexcept>
-#include <errno>
+#include <errno.h>
 
 namespace pgl
 {
@@ -28,7 +28,7 @@ namespace pgl
         setRecoverable(recoverable);
       }
 
-      const char *what() const
+      const char *what() const noexcept
       {
         return "pgl::BusError";
       }
@@ -65,7 +65,7 @@ namespace pgl
       {
       }
 
-      const char *what() const
+      const char *what() const noexcept
       {
         return "pgl::SyscallError";
       }
@@ -85,7 +85,7 @@ namespace pgl
   };
 
 #define PGL_PP_CONCAT1(a,b) a ## b
-#define PGL_PP_CONCAT(a,b) OSCAP_CONCAT1(a,b)
+#define PGL_PP_CONCAT(a,b) PGL_PP_CONCAT1(a,b)
 #define PGL_PP_GSYM(s) PGL_PP_CONCAT(___G_, s)
 
 #define PGL_PROTECT_ERRNO \
@@ -94,7 +94,7 @@ namespace pgl
               PGL_PP_CONCAT(__s,__LINE__)--;\
               errno=PGL_PP_CONCAT(__e,__LINE__))
 
-#define PGL_BUG(text) std::runtime_error("BUG: " \
+#define PGL_BUG(text) std::runtime_error(std::string("BUG: ") \
     + "[" + __FILE__ + "@" + std::to_string(__LINE__) + "] "\
     + __PRETTY_FUNCTION__\
     + ": " + text)\
@@ -113,7 +113,7 @@ namespace pgl
       {
       }
 
-      const char *what() const
+      const char *what() const noexcept
       {
         return "pgl::APIError";
       }

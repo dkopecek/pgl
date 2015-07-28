@@ -17,7 +17,7 @@
 // Authors: Daniel Kopecek <dkopecek@redhat.com>
 //
 #include "Process.hpp"
-#include "Exception.hpp"
+#include "Exceptions.hpp"
 #include "Message.hpp"
 #include "Timeout.hpp"
 #include "Utility.hpp"
