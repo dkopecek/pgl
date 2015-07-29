@@ -124,10 +124,20 @@ namespace pgl
     return;
   }
 
+  unsigned int Process::getMessageBusSendTimeout() const
+  {
+    return _bus_send_timeout_usec;
+  }
+
   void Process::setMessageBusRecvTimeout(unsigned int usec)
   {
     _bus_recv_timeout_usec = usec;
     return;
+  }
+
+  unsigned int Process::getMessageBusRecvTimeout() const
+  {
+    return _bus_recv_timeout_usec;
   }
 
   /*
@@ -235,13 +245,21 @@ namespace pgl
     const uint8_t *buffer = msg.buffer();
     const size_t buffer_size = msg.bufferSize();
 
-    messageBusWrite(_bus_wfd, buffer, buffer_size, 30 * 1000 * 1000);
+    Timeout timeout(getMessageBusSendTimeout());
+    messageBusWrite(_bus_wfd, buffer, buffer_size, timeout.getRemainingTime());
+
     /*
      * If it's a M2M_FD message, we have to send the
      * fd using sendmsg.
      */
     if (msg.getType() == Message::M2M_FD) {
-      writeFD(_bus_wfd, msg.getFD(), 3 * 1000 * 1000);
+      try {
+        writeFD(_bus_wfd, msg.getFD(), timeout.getRemainingTime());
+      }
+      catch(BusError& ex) {
+        ex.setRecoverable(false);
+        throw;
+      }
     }
 
     return;
@@ -268,7 +286,7 @@ namespace pgl
      * type. If there's no message at all received, the timeout counter in
      * the messageBusRecvMessage(bool) method will trigger an exception.
      */
-    Timeout timeout(3 * 1000 * 1000);
+    Timeout timeout(getMessageBusRecvTimeout());
     do {
       Message msg = std::move(messageBusRecvMessage(/*lock_bus=*/false));
       if (msg.getType() == type) {
@@ -292,20 +310,34 @@ namespace pgl
 
     /* Read message header */
     Message::Header header;
+    Timeout timeout(getMessageBusRecvTimeout());
     messageBusRead(_bus_rfd, reinterpret_cast<uint8_t *>(&header),
-        sizeof(Message::Header), 60 * 1000 * 1000); // XXX: hard-coded timeout
+        sizeof(Message::Header), timeout.getRemainingTime());
 
     /* Check reply_header.size value */
     Message msg(header);
-    messageBusRead(_bus_rfd, msg.dataWritable(), msg.dataSize(), 30 * 1000 * 1000); // XXX: hard-coded timeout
+    try {
+      messageBusRead(_bus_rfd, msg.dataWritable(), msg.dataSize(),
+          timeout.getRemainingTime());
+    }
+    catch(BusError& ex) {
+      ex.setRecoverable(false);
+      throw;
+    }
 
     /*
      * Problem: cannot trust the data until validated
      * but cannot validate until the fd is received.
      */
     if (msg.getTypeUnsafe() == Message::Type::M2M_FD) {
-      const int fd = readFD(_bus_rfd, 3 * 1000 * 1000); // XXX: hard-coded timeout
-      msg.setFDUnsafe(fd);
+      try {
+        const int fd = readFD(_bus_rfd, timeout.getRemainingTime());
+        msg.setFDUnsafe(fd);
+      }
+      catch (BusError& ex) {
+        ex.setRecoverable(false);
+        throw;
+      }
     }
 
     /* Check sanity of the whole message */
@@ -523,8 +555,12 @@ namespace pgl
             throw BusError(/*recoverable=*/true);
           }
           else {
-            /* There's still time, try to write again */
-            // XXX: Add a sleep here
+            /*
+             * There's still time, try to write again. Sleep for 1/1000 of the
+             * maximum delay specified.
+             */
+            const struct timespec ts_sleep = { 0, max_delay_usec };
+            nanosleep(&ts_sleep, nullptr);
             continue;
           }
         }
@@ -565,6 +601,8 @@ namespace pgl
           }
           else {
             /* There's still time, try to read again */
+            const struct timespec ts_sleep = { 0, max_delay_usec };
+            nanosleep(&ts_sleep, nullptr);
             continue;
           }
         }
@@ -608,7 +646,10 @@ namespace pgl
       throw SyscallError("kill", errno);
     }
     /* Wait for the child to exit */
-    for (int usec_to_wait = 1000; usec_to_wait > 0; usec_to_wait -= 100) {
+    const int waitpid_timeout_usec = 1000 * 1000;
+    Timeout timeout(waitpid_timeout_usec);
+
+    while (!timeout) {
       int pid_status = -1;
       const pid_t waitpid_ret = ::waitpid(pid, &pid_status, WNOHANG);
 
@@ -619,7 +660,8 @@ namespace pgl
         throw SyscallError("waitpid", errno);
       }
       else if (waitpid_ret == 0) {
-        // XXX: Add a sleep here
+        const struct timespec ts_sleep = { 0, waitpid_timeout_usec };
+        nanosleep(&ts_sleep, nullptr);
         continue;
       }
       else {

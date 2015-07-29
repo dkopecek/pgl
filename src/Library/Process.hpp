@@ -80,6 +80,7 @@ namespace pgl
      *  messageBusSendFD
      */
     void setMessageBusSendTimeout(unsigned int usec);
+    unsigned int getMessageBusSendTimeout() const;
 
     /**
      * Message Bus Receive operation timeout.
@@ -97,6 +98,7 @@ namespace pgl
      *  messageBusRecvFD
      */
     void setMessageBusRecvTimeout(unsigned int usec);
+    unsigned int getMessageBusRecvTimeout() const;
 
     //
     // TODO
