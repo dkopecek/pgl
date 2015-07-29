@@ -18,6 +18,7 @@
 //
 
 #include "Exceptions.hpp"
+#include <cstdint>
 
 namespace pgl
 {
@@ -34,17 +35,21 @@ namespace pgl
 
     operator bool() const
     {
+      return getRemainingTime() < 1;
+    }
+
+    unsigned int getRemainingTime() const
+    {
       struct timespec ts_now;
 
       if (clock_gettime(CLOCK_MONOTONIC, &ts_now) != 0) {
         throw SyscallError("clock_gettime(CLOCK_MONOTONIC)", errno);
       }
 
-      if (tsUsecDiff(ts_now, _ts_start) >= _usec_timeout) {
-        return true;
-      }
+      const int64_t remaining_time = (uint64_t)_usec_timeout \
+                                     - tsUsecDiff(ts_now, _ts_start);
 
-      return false;
+      return (unsigned int)(remaining_time > 0 ? remaining_time : 0);
     }
 
   protected:
