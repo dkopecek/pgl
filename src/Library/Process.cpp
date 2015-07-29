@@ -42,6 +42,8 @@ namespace pgl
     for (unsigned int i = 0; i < Message::type_count; ++i) {
       _bus_recv_queued[i] = false;
     }
+    _bus_send_timeout_usec = 10 * 1000 * 1000;
+    _bus_recv_timeout_usec = 10 * 1000 * 1000;
   }
 
   Process::~Process()
@@ -113,6 +115,18 @@ namespace pgl
     if (wfd_ptr) {
       *wfd_ptr = _bus_wfd;
     }
+    return;
+  }
+
+  void Process::setMessageBusSendTimeout(unsigned int usec)
+  {
+    _bus_send_timeout_usec = usec;
+    return;
+  }
+
+  void Process::setMessageBusRecvTimeout(unsigned int usec)
+  {
+    _bus_recv_timeout_usec = usec;
     return;
   }
 

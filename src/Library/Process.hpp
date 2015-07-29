@@ -64,11 +64,43 @@ namespace pgl
     void getMessageBusFDs(int *rfd_ptr, int *wfd_ptr);
     void setCloseAllFDs(unsigned int from_fd);
 
+    /**
+     * Message Bus Send operation timeout.
+     * This method sets the maximum amount of time, specified in microseconds,
+     * that a send operation is allowed to consume.
+     *
+     * If the operation doesn't complete in the specified time, it'll throw
+     * a BusError exception. Depending on whether any data was sent or not, the
+     * recoverable flag of the BusError exception will be set (no data sent) or
+     * not (some data already sent). The operation may be attempted again if
+     * the recoverable flag is set to true.
+     *
+     * Applies to the following methods:
+     *  messageBusSend
+     *  messageBusSendFD
+     */
+    void setMessageBusSendTimeout(unsigned int usec);
+
+    /**
+     * Message Bus Receive operation timeout.
+     * This method sets the maximum amount of time, specified in microseconds,
+     * that a receive operation is allowed to consume.
+     *
+     * If the operation doesn't complete in the specified time, it'll throw
+     * a BusError exception. Depending on whether any data was received or not,
+     * the recoverable flag of the BusError exception will be set (no data
+     * received) or not (some data received, but not all). The operation may be
+     * attempted again if the recoverable flag is set to true.
+     *
+     * Applies to:
+     *  messageBusRecv
+     *  messageBusRecvFD
+     */
+    void setMessageBusRecvTimeout(unsigned int usec);
+
     //
     // TODO
     //
-    //void setMessageBusSendTimeout(unsigned int usec);
-    //void setMessageBusRecvTimeout(unsigned int usec);
     //void setRunAsUser();
     //void setRunAsGroup();
     //void setChroot();
@@ -225,5 +257,8 @@ namespace pgl
     std::uniform_int_distribution<uint8_t> _rnd_hashbyte;
 
     unsigned int _closeall_fds;
+
+    unsigned int _bus_send_timeout_usec;
+    unsigned int _bus_recv_timeout_usec;
   };
 } /* namespace pgl */
