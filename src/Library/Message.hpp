@@ -64,7 +64,7 @@ namespace pgl
     Message& operator=(const Message&) = delete;
     ~Message();
 
-    void destroy();
+    void reset();
     void setFrom(pid_t pid);
     pid_t getFrom() const;
     void setTo(pid_t pid);
@@ -126,12 +126,12 @@ namespace pgl
       if (!_finalized) {
         throw PGL_API_ERROR("cannot read message: not finalized");
       }
-      return _buffer.get();
+      return _buffer;
     }
 
     uint8_t *bufferWritable()
     {
-      return _buffer.get();
+      return _buffer;
     }
 
     size_t bufferSize() const
@@ -157,7 +157,7 @@ namespace pgl
     Type getTypeUnsafe() const;
 
   private:
-    std::unique_ptr<uint8_t> _buffer; /**< Memory buffer that holds the whole message (header + data) */
+    uint8_t *_buffer; /**< Memory buffer that holds the whole message (header + data) */
     size_t _buffer_size; /**< Size of the memory buffer */
     Header *_header_ptr; /**< Pointer to the message header */
     void *_data_ptr; /**< Pointer to the data part of the message */

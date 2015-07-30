@@ -24,15 +24,16 @@ namespace pgl
 {
   Message::Message()
   {
-    destroy();
+    _buffer = nullptr;
+    reset();
   }
 
   Message::Message(size_t data_size)
     : _buffer_size(sizeof(Message::Header) + data_size),
       _data_size(data_size)
   {
-    _buffer = std::unique_ptr<uint8_t>(new uint8_t[_buffer_size]);
-    _header_ptr = reinterpret_cast<Message::Header *>(_buffer.get());
+    _buffer = new uint8_t[_buffer_size];
+    _header_ptr = reinterpret_cast<Message::Header *>(_buffer);
     _data_ptr = reinterpret_cast<void *>(_header_ptr->data);
 
     memset(_header_ptr, 0, sizeof(Message::Header));
@@ -55,8 +56,8 @@ namespace pgl
     : _buffer_size(sizeof(Message::Header) + header.size),
       _data_size(header.size)
   {
-    _buffer = std::unique_ptr<uint8_t>(new uint8_t[_buffer_size]);
-    _header_ptr = reinterpret_cast<Message::Header *>(_buffer.get());
+    _buffer = new uint8_t[_buffer_size];
+    _header_ptr = reinterpret_cast<Message::Header *>(_buffer);
     _data_ptr = reinterpret_cast<void *>(_header_ptr->data);
 
     *_header_ptr = header;
@@ -69,15 +70,16 @@ namespace pgl
   Message& Message::operator=(Message&& rhs)
   {
     if (this != &rhs) {
-      destroy();
+      reset();
       _buffer_size = rhs._buffer_size;
       _data_size = rhs._data_size;
-      _buffer = std::move(rhs._buffer);
+      _buffer = rhs._buffer;
+      rhs._buffer = nullptr; /* reset the pointer before we reset rhs */
       _header_ptr = rhs._header_ptr;
       _data_ptr = rhs._data_ptr;
       _finalized = rhs._finalized;
       _fd = rhs._fd;
-      rhs.destroy();
+      rhs.reset();
     }
     return *this;
   }
@@ -85,25 +87,25 @@ namespace pgl
   Message::Message(Message&& rhs)
   {
     if (this != &rhs) {
-      destroy();
       _buffer_size = rhs._buffer_size;
       _data_size = rhs._data_size;
-      _buffer = std::move(rhs._buffer);
+      _buffer = rhs._buffer;
+      rhs._buffer = nullptr; /* reset the pointer before we reset rhs */
       _header_ptr = rhs._header_ptr;
       _data_ptr = rhs._data_ptr;
       _finalized = rhs._finalized;
       _fd = rhs._fd;
-      rhs.destroy();
+      rhs.reset();
     }
     return;
   }
 
   Message::~Message()
   {
-    destroy();
+    reset();
   }
 
-  void Message::destroy()
+  void Message::reset()
   {
     _buffer_size = 0;
     _header_ptr = nullptr;
@@ -111,7 +113,11 @@ namespace pgl
     _data_size = 0;
     _fd = -1;
     _finalized = false;
-    _buffer.release();
+    if (_buffer != nullptr) {
+      delete [] _buffer;
+      _buffer = nullptr;
+    }
+    return;
   }
 
   void Message::setFrom(pid_t pid)

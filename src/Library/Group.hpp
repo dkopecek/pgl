@@ -80,6 +80,7 @@ namespace pgl
     {
     public:
       FDTask(const int fd, unsigned int usec_timeout = -1);
+      virtual ~FDTask() {}
       bool operator==(const FDTask& rhs) const;
       bool operator<(const FDTask& rhs) const;
       bool operator>(const FDTask& rhs) const;
@@ -97,6 +98,8 @@ namespace pgl
     {
     public:
       FDRecvTask(int fd, void *recv_buffer = nullptr, size_t recv_size = 0, unsigned int usec_timeout = -1);
+      virtual ~FDRecvTask() {}
+
       bool run(Group& group) final;
       void setReceiveBuffer(void *buffer);
       void setReceiveSize(size_t size);
@@ -122,6 +125,7 @@ namespace pgl
     {
     public:
       FDSendTask(int fd, void *send_buffer = nullptr, size_t send_size = 0, unsigned int usec_timeout = -1);
+      virtual ~FDSendTask() {}
       bool run(Group& group) final;
       void setSendBuffer(const void *buffer);
       void setSendSize(size_t size);
@@ -243,8 +247,8 @@ namespace pgl
     int groupExitCode();
     void masterReceiveSignal();
     void masterReceiveHeader(int fd);
-    void masterAddReadTask(std::shared_ptr<FDTask>& task);
-    void masterAddWriteTask(std::shared_ptr<FDTask>& task);
+    void masterAddReadTask(FDTask* task);
+    void masterAddWriteTask(FDTask* task);
     void masterHandleBusMessage(Message&& msg, int from_fd);
     void masterRouteMessage(Message&& msg);
     void masterPIDLookupReply(Message&&, int from_fd);
@@ -308,11 +312,11 @@ namespace pgl
     /*
      * Map of file descriptors to their read task queues.
      */
-    std::unordered_map<int, std::queue<std::shared_ptr<FDTask> > > _tasks_rd;
+    std::unordered_map<int, std::queue<FDTask*> > _tasks_rd;
     /*
      * Map of file descriptors to their write task queues.
      */
-    std::unordered_map<int, std::queue<std::shared_ptr<FDTask> > > _tasks_wr;
+    std::unordered_map<int, std::queue<FDTask*> > _tasks_wr;
     /*
      * Group termination flag
      */

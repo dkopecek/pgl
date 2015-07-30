@@ -250,11 +250,12 @@ namespace pgl
             continue;
           }
 
-          auto& task = queue.front();
+          FDTask* task = queue.front();
           assert(task->fd() == fd);
 
           if (task->run(*this)) {
             queue.pop();
+            delete task;
           }
 
           if (queue.empty()) {
@@ -285,13 +286,16 @@ namespace pgl
               continue;
             }
 
-            auto& task = queue.front();
+            FDTask* task = queue.front();
+            assert(task->fd() == fd);
 
             if (task->run(*this)) {
               queue.pop();
-              if (queue.empty()) {
-                _tasks_rd.erase(fd);
-              }
+              delete task;
+            }
+
+            if (queue.empty()) {
+              _tasks_rd.erase(fd);
             }
           }
         }
@@ -329,17 +333,20 @@ namespace pgl
   void Group::masterReceiveHeader(int fd)
   {
     std::cerr << "receiving header" << std::endl;
-    std::shared_ptr<FDTask> task = std::make_shared<Group::HeaderRecvTask>(fd, 3 * 1000 * 1000);
+    FDTask *task = new Group::HeaderRecvTask(fd, 3 * 1000 * 1000);
 
     if (task->run(*this)) {
-      return;
+      /* The task is complete, delete it */
+      delete task;
     }
-    /*
-     * Completion of the task would block the thread, add
-     * it to read tasks. It'll be completed then the fd becoms
-     * readable again.
-     */
-    masterAddReadTask(task);
+    else {
+      /*
+       * Completion of the task would block the thread, add
+       * it to read tasks. It'll be completed then the fd becoms
+       * readable again.
+       */
+      masterAddReadTask(task);
+    }
     return;
   }
 
@@ -357,7 +364,7 @@ namespace pgl
     return process->main(_process_argc, _process_argv);
   }
 
-  void Group::masterAddReadTask(std::shared_ptr<FDTask>& task)
+  void Group::masterAddReadTask(FDTask* task)
   {
     std::cerr << "adding read task" << std::endl;
     const int fd = task->fd();
@@ -365,7 +372,7 @@ namespace pgl
     return;
   }
 
-  void Group::masterAddWriteTask(std::shared_ptr<FDTask>& task)
+  void Group::masterAddWriteTask(FDTask* task)
   {
     std::cerr << "adding write task" << std::endl;
     const int fd = task->fd();
@@ -401,7 +408,7 @@ namespace pgl
     auto const& process = _process_by_pid[pid_to];
     int fd = -1;
     process->getMessageBusFDs(nullptr, &fd);
-    std::shared_ptr<FDTask> task = std::make_shared<MessageSendTask>(fd, std::move(msg));
+    FDTask* task = new MessageSendTask(fd, std::move(msg));
     masterAddWriteTask(task);
     return;
   }
@@ -711,9 +718,13 @@ namespace pgl
     // TODO: check sender pid
     // TODO: check size limits
     //
-    std::shared_ptr<FDTask> task = std::make_shared<MessageRecvTask>(fd(), _header);
+    FDTask* task = new MessageRecvTask(fd(), _header);
 
-    if (!task->run(group)) {
+    if (task->run(group)) {
+      /* The task is complete, delete it */
+      delete task;
+    }
+    else {
       group.masterAddReadTask(task);
     }
 
