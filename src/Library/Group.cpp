@@ -34,7 +34,8 @@ namespace pgl
 
   Group::Group(int argc, char *argv[])
     : _process_argc(argc),
-      _process_argv(argv)
+      _process_argv(argv),
+      _graceful_termination_timeout(2 * 1000 * 1000)
   {
     if (argc < 1 || argv == nullptr) {
       throw std::invalid_argument("BUG: Group ctor: invalid argc/argv[] parameter values");
@@ -71,6 +72,7 @@ namespace pgl
 
     _exec_path = exec_path;
     _exec_name = exec_name;
+    _group_terminate = false;
 
     if (master_mode) {
       _master_mode = true;
@@ -154,6 +156,26 @@ namespace pgl
   void Group::masterProcessEvents()
   {
     for (;;) {
+      if (_group_terminate) {
+        /*
+         * Check whether the graceful termination period
+         * is over. Return immediatelly if there's no more
+         * time left to complete queued tasks.
+         */
+        if (_graceful_termination_timeout) {
+          std::cerr << "Graceful timeout expired! Returning from main loop" << std::endl;
+          return;
+        }
+        /*
+         * We can exit the main loop if the task queues are
+         * empty.
+         */
+        if (_tasks_wr.empty() && _tasks_rd.empty()) {
+          std::cerr << "Queues empty" << std::endl;
+          return;
+        }
+      }
+
       fd_set rd_set;
       fd_set wr_set;
 
@@ -248,6 +270,10 @@ namespace pgl
       for (int fd = 0; fd <= max_rfd; ++fd) {
         if (FD_ISSET(fd, &rd_set)) {
           if (_tasks_rd.count(fd) == 0) {
+            /* Do not create a new task if we are in the termination phase */
+            if (_group_terminate) {
+              continue;
+            }
             /* Create a new RecvHeaderTask */
             masterReceiveHeader(fd);
           }
@@ -291,6 +317,7 @@ namespace pgl
       case SIGTERM:
       case SIGINT:
         // enter shutdown mode
+        masterTerminate();
         break;
       default:
         std::cerr << "Ignoring signal" << std::endl;
@@ -399,8 +426,21 @@ namespace pgl
     reply.copyToData(&pid, sizeof (pid_t));
     reply.finalize();
 
-    std::shared_ptr<FDTask> task = std::make_shared<MessageSendTask>(from_fd, std::move(reply));
+    FDTask* task = new MessageSendTask(from_fd, std::move(reply));
     masterAddWriteTask(task);
+    return;
+  }
+
+  void Group::masterTerminate()
+  {
+    _group_terminate = true;
+    _graceful_termination_timeout.reset();
+    return;
+  }
+
+  void Group::masterSetTerminationTimeout(unsigned int usec)
+  {
+    _graceful_termination_timeout.set(usec);
     return;
   }
 

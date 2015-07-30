@@ -248,6 +248,8 @@ namespace pgl
     void masterHandleBusMessage(Message&& msg, int from_fd);
     void masterRouteMessage(Message&& msg);
     void masterPIDLookupReply(Message&&, int from_fd);
+    void masterTerminate();
+    void masterSetTerminationTimeout(unsigned int usec);
 
   private:
     /*
@@ -311,5 +313,13 @@ namespace pgl
      * Map of file descriptors to their write task queues.
      */
     std::unordered_map<int, std::queue<std::shared_ptr<FDTask> > > _tasks_wr;
+    /*
+     * Group termination flag
+     */
+    bool _group_terminate;
+    /*
+     * Timeout object for the graceful termination period
+     */
+    Timeout _graceful_termination_timeout;
   };
 } /* namespace pgl */

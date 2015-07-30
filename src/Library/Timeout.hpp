@@ -26,11 +26,9 @@ namespace pgl
   {
   public:
     Timeout(unsigned int usec)
-      : _usec_timeout(usec)
     {
-      if (clock_gettime(CLOCK_MONOTONIC, &_ts_start) != 0) {
-        throw SyscallError("clock_gettime(CLOCK_MONOTONIC)", errno);
-      }
+      set(usec);
+      reset();
     }
 
     operator bool() const
@@ -50,6 +48,19 @@ namespace pgl
                                      - tsUsecDiff(ts_now, _ts_start);
 
       return (unsigned int)(remaining_time > 0 ? remaining_time : 0);
+    }
+
+    void reset()
+    {
+      if (clock_gettime(CLOCK_MONOTONIC, &_ts_start) != 0) {
+        throw SyscallError("clock_gettime(CLOCK_MONOTONIC)", errno);
+      }
+    }
+
+    void set(unsigned int usec)
+    {
+      _usec_timeout = usec;
+      return;
     }
 
   protected:
