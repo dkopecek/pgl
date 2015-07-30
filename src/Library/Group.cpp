@@ -84,6 +84,9 @@ namespace pgl
       sigdelset(&mask, SIGFPE);
       sigdelset(&mask, SIGBUS);
 
+      if (sigprocmask(SIG_SETMASK, &mask, nullptr) != 0) {
+        throw SyscallError("sigprocmask", errno);
+      }
       if ((_signal_fd = signalfd(-1, &mask, SFD_NONBLOCK|SFD_CLOEXEC)) == -1) {
         throw SyscallError("signalfd", errno);
       }
@@ -280,6 +283,17 @@ namespace pgl
     // NOTE: Tolerate EAGAIN, EINTR here?
     if (read(_signal_fd, &sig, sizeof sig) != sizeof sig) {
       throw SyscallError("read(_signal_fd)", errno);
+    }
+
+    std::cerr << "received signal #" << sig.ssi_signo << std::endl;
+
+    switch(sig.ssi_signo) {
+      case SIGTERM:
+      case SIGINT:
+        // enter shutdown mode
+        break;
+      default:
+        std::cerr << "Ignoring signal" << std::endl;
     }
 
     return;
