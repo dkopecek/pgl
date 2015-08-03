@@ -20,6 +20,7 @@
 #include "Exceptions.hpp"
 #include "Process.hpp"
 #include "Utility.hpp"
+#include "Logger.hpp"
 #include <sys/signalfd.h>
 #include <assert.h>
 #include <time.h>
@@ -163,7 +164,8 @@ namespace pgl
          * time left to complete queued tasks.
          */
         if (_graceful_termination_timeout) {
-          std::cerr << "Graceful timeout expired! Returning from main loop" << std::endl;
+          PGL_LOG() << "Graceful exit timeout expired! "
+            << "Returning from main loop." << std::endl;
           return;
         }
         /*
@@ -171,7 +173,8 @@ namespace pgl
          * empty.
          */
         if (_tasks_wr.empty() && _tasks_rd.empty()) {
-          std::cerr << "Queues empty" << std::endl;
+          PGL_LOG() << "Task queues are empty. "
+            << "Returning from main loop." << std::endl;
           return;
         }
       }
@@ -315,16 +318,17 @@ namespace pgl
       throw SyscallError("read(_signal_fd)", errno);
     }
 
-    std::cerr << "received signal #" << sig.ssi_signo << std::endl;
+    PGL_LOG() << "Received signal #" << sig.ssi_signo;
 
     switch(sig.ssi_signo) {
       case SIGTERM:
       case SIGINT:
-        // enter shutdown mode
+        /* Enter shutdown mode */
+        PGL_LOG() << "Received SIGTERM/SIGINT: shutting down.";
         masterTerminate();
         break;
       default:
-        std::cerr << "Ignoring signal" << std::endl;
+        PGL_LOG() << "Signal ignored.";
     }
 
     return;
@@ -332,7 +336,7 @@ namespace pgl
 
   void Group::masterReceiveHeader(int fd)
   {
-    std::cerr << "receiving header" << std::endl;
+    PGL_LOG() << "Receiving header from fd=" << fd;
     FDTask *task = new Group::HeaderRecvTask(fd, 3 * 1000 * 1000);
 
     if (task->run(*this)) {
@@ -366,7 +370,7 @@ namespace pgl
 
   void Group::masterAddReadTask(FDTask* task)
   {
-    std::cerr << "adding read task" << std::endl;
+    PGL_LOG() << "Adding read task";
     const int fd = task->fd();
     _tasks_rd[fd].push(task);
     return;
@@ -374,7 +378,7 @@ namespace pgl
 
   void Group::masterAddWriteTask(FDTask* task)
   {
-    std::cerr << "adding write task" << std::endl;
+    PGL_LOG() << "Adding write task";
     const int fd = task->fd();
     _tasks_wr[fd].push(task);
     return;
@@ -382,7 +386,7 @@ namespace pgl
 
   void Group::masterHandleBusMessage(Message&& msg, int from_fd)
   {
-    std::cerr << "handling bus message" << std::endl;
+    PGL_LOG() << "Handling bus message on fd=" << from_fd;
     msg.validate();
 
     switch(msg.getType())
@@ -403,10 +407,10 @@ namespace pgl
 
   void Group::masterRouteMessage(Message&& msg)
   {
-    std::cerr << "Routing message" << std::endl;
     const pid_t pid_to = msg.getTo();
     auto const& process = _process_by_pid[pid_to];
     int fd = -1;
+    PGL_LOG() << "Routing message to PID " << pid_to;
     process->getMessageBusFDs(nullptr, &fd);
     FDTask* task = new MessageSendTask(fd, std::move(msg));
     masterAddWriteTask(task);
@@ -415,7 +419,7 @@ namespace pgl
 
   void Group::masterPIDLookupReply(Message&& msg, int from_fd)
   {
-    std::cerr << "PID lookup" << std::endl;
+    PGL_LOG() << "PID lookup request on fd=" << from_fd;
     const std::string name(reinterpret_cast<const char *>(msg.data()), msg.dataSize());
     pid_t pid = -1;
 
@@ -425,6 +429,8 @@ namespace pgl
       pid = process->getPID();
       break;
     }
+
+    PGL_LOG() << "PID lookup response: " << name << " => " << pid;
 
     Message reply(sizeof(pid_t));
     reply.setFrom(0);
@@ -645,9 +651,7 @@ namespace pgl
 
   bool Group::FDSendTask::sendData()
   {
-    std::cerr << "sendData: w=" << _size_written << " t=" << _size_total << std::endl;
     if (_size_written == _size_total) {
-      std::cerr << "sendData: all sent" << std::endl;
       return true;
     }
 
@@ -676,18 +680,14 @@ namespace pgl
 
   bool Group::FDSendTask::sendFD()
   {
-    std::cerr << "sendFD" << std::endl;
     if (!_send_fd) {
-      std::cerr << "!_send_fd == true" << std::endl;
       return true;
     }
 
     if (writeFD(fd(), _fd, 0) != -1) {
       _send_fd = false;
-      std::cerr << "sendFD: sent" << std::endl;
       return true;
     } else {
-      std::cerr << "sendFD: write failed" << std::endl;
       return false;
     }
   }
@@ -708,12 +708,10 @@ namespace pgl
   Group::HeaderRecvTask::HeaderRecvTask(int fd, unsigned int usec_timeout)
     : Group::FDRecvTask(fd, &_header, sizeof(Message::Header), usec_timeout)
   {
-    std::cerr << "Creating HeaderRecvTask" << std::endl;
   }
 
   bool Group::HeaderRecvTask::process(Group& group)
   {
-    std::cerr << "Processing HeaderRecvTask" << std::endl;
     //
     // TODO: check sender pid
     // TODO: check size limits
@@ -740,21 +738,17 @@ namespace pgl
     : Group::FDRecvTask(fd, nullptr, 0, usec_timeout),
       _msg(header)
   {
-    std::cerr << "Creating MessageRecvTask" << std::endl;
     setReceiveBuffer(_msg.dataWritable());
     setReceiveSize(_msg.dataSize());
     if (header.type == Message::Type::M2M_FD) {
       setReceiveFD();
-      std::cerr << "MessageRecvTask with fd" << std::endl;
     }
   }
 
   bool Group::MessageRecvTask::process(Group& group)
   {
-    std::cerr << "Processing MessageRecvTask" << std::endl;
     if (_msg.getTypeUnsafe() == Message::Type::M2M_FD) {
       _msg.setFD(getFD());
-      std::cerr << "MessageRecvTask has fd" << std::endl;
     }
     group.masterHandleBusMessage(std::move(_msg), fd());
     return true;
@@ -770,12 +764,10 @@ namespace pgl
     : Group::FDSendTask(fd, nullptr, 0, usec_timeout),
       _msg(std::move(msg))
   {
-    std::cerr << "Creating a MessageSendTask: buffer_size=" << _msg.bufferSize() << std::endl;
     setSendBuffer(_msg.buffer());
     setSendSize(_msg.bufferSize());
     if (_msg.getType() == Message::Type::M2M_FD) {
       setSendFD(_msg.getFD());
-      std::cerr << "MessageSendTask with fd" << std::endl;
     }
   }
 
