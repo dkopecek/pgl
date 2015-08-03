@@ -51,7 +51,7 @@ namespace pgl
      * If PGL_DEBUG=1 is set in the current environment, then
      * open the log file stream and mark the logger as active.
      */
-    if (envval != nullptr && envval[0] == '1') {
+    if (envval != nullptr && strcmp(envval, "1") == 0) {
       _path = "pgl-debug.";
       _path += std::to_string(getpid());
       _path += ".log";
