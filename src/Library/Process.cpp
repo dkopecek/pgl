@@ -37,7 +37,7 @@ namespace pgl
     _bus_wfd = -1;
     _bus_rfd = -1;
     _state = Process::State::Initialized;
-    _keep_env = { "SSH_AUTH_SOCK", "GPG_AGENT_INFO" };
+    _keep_env = { "SSH_AUTH_SOCK", "GPG_AGENT_INFO", "PGL_DEBUG" };
     _closeall_fds = 1;
     for (unsigned int i = 0; i < Message::type_count; ++i) {
       _bus_recv_queued[i] = false;
