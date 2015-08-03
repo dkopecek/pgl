@@ -20,6 +20,7 @@
 #include "Exceptions.hpp"
 #include <sys/types.h>
 #include <unistd.h>
+#include <string.h>
 
 namespace pgl
 {
