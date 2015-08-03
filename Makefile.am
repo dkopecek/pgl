@@ -33,14 +33,16 @@ libpgl_la_SOURCES=\
 	src/Library/Message.cpp \
 	src/Library/Utility.hpp \
 	src/Library/Utility.cpp \
-	src/Library/Timeout.hpp
+	src/Library/Logger.cpp
 
 pkginclude_HEADERS=\
 	src/Library/Group.hpp \
 	src/Library/Process.hpp \
 	src/Library/Message.hpp \
 	src/Library/pgl.hpp \
-	src/Library/Exceptions.hpp
+	src/Library/Exceptions.hpp \
+	src/Library/Timeout.hpp \
+	src/Library/Logger.hpp
 
 bin_PROGRAMS=\
 	test \
