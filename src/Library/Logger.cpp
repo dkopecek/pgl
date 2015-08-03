@@ -17,6 +17,7 @@
 // Authors: Daniel Kopecek <dkopecek@redhat.com>
 //
 #include "Logger.hpp"
+#include "Exceptions.hpp"
 #include <sys/types.h>
 #include <unistd.h>
 
@@ -101,7 +102,7 @@ namespace pgl
     struct timeval tv_now = { 0, 0 };
 
     if (gettimeofday(&tv_now, nullptr) != 0) {
-      throw SyscallError("gettimeofday", errno);
+      throw SyscallError("gettimeofday", errno, /*nolog=*/true);
     }
 
     return std::to_string(tv_now.tv_sec) \

@@ -17,7 +17,6 @@
 // Authors: Daniel Kopecek <dkopecek@redhat.com>
 //
 #pragma once
-#include "Exceptions.hpp"
 #include <mutex>
 #include <fstream>
 #include <sstream>

@@ -21,3 +21,5 @@
 #include "Message.hpp"
 #include "Process.hpp"
 #include "Group.hpp"
+#include "Exceptions.hpp"
+#include "Logger.hpp"

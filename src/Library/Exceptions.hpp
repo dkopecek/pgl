@@ -17,6 +17,7 @@
 // Authors: Daniel Kopecek <dkopecek@redhat.com>
 //
 #pragma once
+#include "Logger.hpp"
 #include <stdexcept>
 #include <errno.h>
 
@@ -44,6 +45,10 @@ namespace pgl
       BusError(bool recoverable)
       {
         setRecoverable(recoverable);
+        try {
+          PGL_LOG() << "BusError: recoverable=" << recoverable;
+        } catch(...) {
+        }
       }
 
       const char *what() const noexcept
@@ -78,9 +83,15 @@ namespace pgl
   class SyscallError : public Exception
   {
     public:
-      SyscallError(const std::string& syscall, int error)
+      SyscallError(const std::string& syscall, int error, bool nolog = false)
         : _syscall(syscall), _error(error)
       {
+        if (!nolog) {
+          try {
+            PGL_LOG() << "SyscallError: " << syscall << ": errno=" << errno;
+          } catch(...) {
+          }
+        }
       }
 
       const char *what() const noexcept
@@ -129,6 +140,10 @@ namespace pgl
       APIError(const std::string& api_name, const std::string& message)
         : _api_name(api_name), _message(message)
       {
+        try {
+          PGL_LOG() << "APIError: " << api_name << ": " << message;
+        } catch(...) {
+        }
       }
 
       const char *what() const noexcept
