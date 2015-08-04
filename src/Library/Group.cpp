@@ -225,9 +225,13 @@ namespace pgl
       const int nfds = select(max_fd + 1, &rd_set, &wr_set, nullptr, &tv_timeout);
 
       if (nfds == -1) {
+        PGL_LOG() << "select returned -1: errno=" << errno;
         return;
       }
       else if (nfds == 0) {
+        PGL_LOG() << "select timeout:"
+          << " active fds (rd)= " << _tasks_rd.size()
+          << " active fds (wr)= " << _tasks_wr.size();
         continue;
       }
 
@@ -235,6 +239,7 @@ namespace pgl
        * Handle signals first
        */
       if (FD_ISSET(_signal_fd, &rd_set)) {
+        PGL_LOG() << "Data available on signal fd=" << _signal_fd;
         masterReceiveSignal();
         FD_CLR(_signal_fd, &rd_set);
       }
@@ -249,19 +254,24 @@ namespace pgl
           auto& queue = it->second;
 
           if (queue.empty()) {
-            ++it;
+            PGL_LOG() << "BUG: empty write queue for active fd=" << fd;
+            it = _tasks_wr.erase(it);
             continue;
           }
 
           FDTask* task = queue.front();
           assert(task->fd() == fd);
 
+          PGL_LOG() << "Running write task for fd=" << fd;
+
           if (task->run(*this)) {
+            PGL_LOG() << "Write task for fd=" << fd << " complete, deleting.";
             queue.pop();
             delete task;
           }
 
           if (queue.empty()) {
+            PGL_LOG() << "Removing empty write queue for fd=" << fd;
             it = _tasks_wr.erase(it);
             continue;
           }
@@ -276,9 +286,12 @@ namespace pgl
           if (_tasks_rd.count(fd) == 0) {
             /* Do not create a new task if we are in the termination phase */
             if (_group_terminate) {
+              PGL_LOG() << "Termination phase. Ignoring message on fd=" << fd;
               continue;
             }
             /* Create a new RecvHeaderTask */
+            PGL_LOG() << "Data available on fd=" << fd << "."
+              << " Trying to read message header.";
             masterReceiveHeader(fd);
           }
           else {
@@ -286,19 +299,26 @@ namespace pgl
             auto& queue = _tasks_rd[fd];
 
             if (queue.empty()) {
+              PGL_LOG() << "BUG: Empty read queue for active fd=" << fd;
+              _tasks_rd.erase(fd);
               continue;
             }
 
             FDTask* task = queue.front();
             assert(task->fd() == fd);
 
+            PGL_LOG() << "Running read task for fd=" << fd;
+
             if (task->run(*this)) {
+              PGL_LOG() << "Read task for fd=" << fd << " complete, deleting.";
               queue.pop();
               delete task;
             }
 
             if (queue.empty()) {
+              PGL_LOG() << "Removing empty read queue for fd=" << fd;
               _tasks_rd.erase(fd);
+              continue;
             }
           }
         }
