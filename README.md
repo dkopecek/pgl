@@ -38,6 +38,14 @@ With current API, it's possible to define a group of processes, start them and
 use API functions to send and receive unstructured messages to any member of
 the group. It is also possible to send and receive open file descriptors.
 
+### Debugging
+
+The library has a built-in, thread-safe logger for debugging purposes. To activate it, just set the `PGL_DEBUG` environment variable to `1` and then, when you run your pgl based application, debugging messages from the library will be written to `pgl-debug.<PID>.log` files -- one per process. You can use the logger from your app if you wish to do so. Just ensure that the `pgl/Logger.hpp` header file is included (or `pgl/pgl.hpp`) and then you can use the `PGL_LOG()` macro for appending messages to the log:
+
+```c++
+PGL_LOG() << "Something happend and errno is set to " << errno;
+```
+
 ### pgl::Process
 
 A process is implemented as a subclass of the API-provided class, `pgl::Process`.
