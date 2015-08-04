@@ -101,7 +101,35 @@ namespace pgl
       _signal_fd = -1;
     }
 
+    /*
+     * Default task timeouts: 5 seconds.
+     */
+    _task_send_timeout_usec = 5 * 1000 * 1000;
+    _task_recv_timeout_usec = 5 * 1000 * 1000;
+
     return;
+  }
+
+  void Group::setTaskSendTimeout(unsigned int usec)
+  {
+    _task_send_timeout_usec = usec;
+    return;
+  }
+
+  unsigned int Group::getTaskSendTimeout() const
+  {
+    return _task_send_timeout_usec;
+  }
+
+  void Group::setTaskRecvTimeout(unsigned int usec)
+  {
+    _task_recv_timeout_usec = usec;
+    return;
+  }
+
+  unsigned int Group::getTaskRecvTimeout() const
+  {
+    return _task_recv_timeout_usec;
   }
 
   int Group::run()
@@ -357,7 +385,7 @@ namespace pgl
   void Group::masterReceiveHeader(int fd)
   {
     PGL_LOG() << "Receiving header from fd=" << fd;
-    FDTask *task = new Group::HeaderRecvTask(fd, 3 * 1000 * 1000);
+    FDTask *task = new Group::HeaderRecvTask(fd, _task_recv_timeout_usec);
 
     if (task->run(*this)) {
       /* The task is complete, delete it */
@@ -432,7 +460,7 @@ namespace pgl
     int fd = -1;
     PGL_LOG() << "Routing message to PID " << pid_to;
     process->getMessageBusFDs(nullptr, &fd);
-    FDTask* task = new MessageSendTask(fd, std::move(msg));
+    FDTask* task = new MessageSendTask(fd, std::move(msg), _task_send_timeout_usec);
     masterAddWriteTask(task);
     return;
   }
@@ -459,7 +487,7 @@ namespace pgl
     reply.copyToData(&pid, sizeof (pid_t));
     reply.finalize();
 
-    FDTask* task = new MessageSendTask(from_fd, std::move(reply));
+    FDTask* task = new MessageSendTask(from_fd, std::move(reply), _task_send_timeout_usec);
     masterAddWriteTask(task);
     return;
   }
@@ -736,7 +764,7 @@ namespace pgl
     // TODO: check sender pid
     // TODO: check size limits
     //
-    FDTask* task = new MessageRecvTask(fd(), _header);
+    FDTask* task = new MessageRecvTask(fd(), _header, group.getTaskRecvTimeout());
 
     if (task->run(group)) {
       /* The task is complete, delete it */

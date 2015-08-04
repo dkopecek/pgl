@@ -75,6 +75,11 @@ namespace pgl
      */
     int run();
 
+    void setTaskSendTimeout(unsigned int usec);
+    unsigned int getTaskSendTimeout() const;
+    void setTaskRecvTimeout(unsigned int usec);
+    unsigned int getTaskRecvTimeout() const;
+
   protected:
     class FDTask
     {
@@ -325,5 +330,13 @@ namespace pgl
      * Timeout object for the graceful termination period
      */
     Timeout _graceful_termination_timeout;
+    /*
+     * Task send task timeout
+     */
+    unsigned int _task_send_timeout_usec;
+    /*
+     * Task recv task timeout
+     */
+    unsigned int _task_recv_timeout_usec;
   };
 } /* namespace pgl */
