@@ -43,7 +43,7 @@ the group. It is also possible to send and receive open file descriptors.
 The library has a built-in, thread-safe logger for debugging purposes. To activate it, just set the `PGL_DEBUG` environment variable to `1` and then, when you run your pgl based application, debugging messages from the library will be written to `pgl-debug.<PID>.log` files -- one per process. You can use the logger from your app if you wish to do so. Just ensure that the `pgl/Logger.hpp` header file is included (or `pgl/pgl.hpp`) and then you can use the `PGL_LOG()` macro for appending messages to the log:
 
 ```c++
-PGL_LOG() << "Something happend and errno is set to " << errno;
+PGL_LOG() << "Something happened and errno is set to " << errno;
 ```
 
 ### pgl::Process
