@@ -145,7 +145,7 @@ namespace pgl
   int Group::masterRun()
   {
     masterStartProcesses();
-    masterProcessEvents();
+    masterMainloop();
     masterStopProcesses();
     return groupExitCode();
   }
@@ -179,181 +179,215 @@ namespace pgl
     }
   }
 
-  //
-  // TODO: Refactor the mess in the method below
-  //
-  void Group::masterProcessEvents()
+  bool Group::masterMainloopTerminated() const
   {
-    for (;;) {
-      if (_group_terminate) {
-        /*
-         * Check whether the graceful termination period
-         * is over. Return immediatelly if there's no more
-         * time left to complete queued tasks.
-         */
-        if (_graceful_termination_timeout) {
-          PGL_LOG() << "Graceful exit timeout expired! "
-            << "Returning from main loop." << std::endl;
-          return;
-        }
-        /*
-         * We can exit the main loop if the task queues are
-         * empty.
-         */
-        if (_tasks_wr.empty() && _tasks_rd.empty()) {
-          PGL_LOG() << "Task queues are empty. "
-            << "Returning from main loop." << std::endl;
-          return;
-        }
+    if (_group_terminate) {
+      /*
+       * Check whether the graceful termination period
+       * is over. Return immediatelly if there's no more
+       * time left to complete queued tasks.
+       */
+      if (_graceful_termination_timeout) {
+        PGL_LOG() << "Graceful exit timeout expired! "
+          << "Returning from main loop." << std::endl;
+        return true;
+      }
+      /*
+       * We can exit the main loop if the task queues are
+       * empty.
+       */
+      if (_tasks_wr.empty() && _tasks_rd.empty()) {
+        PGL_LOG() << "Task queues are empty. "
+          << "Returning from main loop." << std::endl;
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  void Group::masterMainloopCollectActiveFDs(fd_set& rd_set, fd_set& wr_set,
+      int& max_fd, int& max_rfd)
+  {
+    FD_SET(_signal_fd, &rd_set);
+    max_fd = _signal_fd;
+
+    for (auto const& map_entry : _process_by_pid) {
+      auto const& process = map_entry.second;
+      int fd = -1;
+      process->getMessageBusFDs(&fd, nullptr);
+      if (fd == -1) {
+        throw PGL_BUG("getMessageBusFDs method returned an invalid fd");
       }
 
-      fd_set rd_set;
-      fd_set wr_set;
+      max_fd = std::max(max_fd, fd);
+      max_rfd = std::max(max_rfd, fd);
 
-      /* Initialize */
-      FD_ZERO(&rd_set);
-      FD_ZERO(&wr_set);
+      FD_SET(fd, &rd_set);
+    }
 
-      int max_fd = -1;
-      int max_rfd = -1;
-      struct timeval tv_timeout = { 10, 0 /*us*/ };
-
-      /*
-       * Collect fds
-       */
-      FD_SET(_signal_fd, &rd_set);
-      max_fd = _signal_fd;
-
-      for (auto const& map_entry : _process_by_pid) {
-        auto const& process = map_entry.second;
-        int fd = -1;
-        process->getMessageBusFDs(&fd, nullptr);
-        if (fd == -1) {
-          throw PGL_BUG("getMessageBusFDs method returned an invalid fd");
-        }
-
+    for (auto const& map_entry : _tasks_wr) {
+      auto const& queue = map_entry.second;
+      if (queue.size() > 0) {
+        const int fd = map_entry.first;
         max_fd = std::max(max_fd, fd);
-        max_rfd = std::max(max_rfd, fd);
-
-        FD_SET(fd, &rd_set);
+        FD_SET(fd, &wr_set);
       }
+    }
 
-      for (auto const& map_entry : _tasks_wr) {
-        auto const& queue = map_entry.second;
-        if (queue.size() > 0) {
-          const int fd = map_entry.first;
-          max_fd = std::max(max_fd, fd);
-          FD_SET(fd, &wr_set);
+    return;
+  }
+
+  int Group::masterMainloopWaitForEvents(fd_set& rd_set, fd_set& wr_set, int max_fd)
+  {
+    struct timeval tv_timeout = { 10, 0 /*us*/ };
+
+    const int nfds = select(max_fd + 1, &rd_set, &wr_set, nullptr, &tv_timeout);
+
+    if (nfds == -1) {
+      PGL_PROTECT_ERRNO {
+        PGL_LOG() << "select returned -1: errno=" << errno;
+      }
+      throw SyscallError("select", errno);
+    }
+    else if (nfds == 0) {
+      PGL_LOG() << "select timeout:"
+        << " active fds (rd)= " << _tasks_rd.size()
+        << " active fds (wr)= " << _tasks_wr.size();
+    }
+
+    return nfds;
+  }
+
+  void Group::masterMainloopProcessWriteEvents(fd_set& wr_set)
+  {
+    /*
+     * Handle writes before reads to free some memory
+     */
+    for (auto it = _tasks_wr.begin(); it != _tasks_wr.end(); ) {
+      const int fd = it->first;
+
+      if (FD_ISSET(fd, &wr_set)) {
+        auto& queue = it->second;
+
+        if (queue.empty()) {
+          PGL_LOG() << "BUG: empty write queue for active fd=" << fd;
+          it = _tasks_wr.erase(it);
+          continue;
+        }
+
+        FDTask* task = queue.front();
+        assert(task->fd() == fd);
+
+        PGL_LOG() << "Running write task for fd=" << fd;
+
+        if (task->run(*this)) {
+          PGL_LOG() << "Write task for fd=" << fd << " complete, deleting.";
+          queue.pop();
+          delete task;
+        }
+
+        if (queue.empty()) {
+          PGL_LOG() << "Removing empty write queue for fd=" << fd;
+          it = _tasks_wr.erase(it);
+          continue;
         }
       }
 
-      /*
-       * Wait for events
-       */
-      const int nfds = select(max_fd + 1, &rd_set, &wr_set, nullptr, &tv_timeout);
+      ++it;
+    } /* write task loop end */
 
-      if (nfds == -1) {
-        PGL_LOG() << "select returned -1: errno=" << errno;
-        return;
-      }
-      else if (nfds == 0) {
-        PGL_LOG() << "select timeout:"
-          << " active fds (rd)= " << _tasks_rd.size()
-          << " active fds (wr)= " << _tasks_wr.size();
-        continue;
-      }
+    return;
+  }
 
-      /*
-       * Handle signals first
-       */
-      if (FD_ISSET(_signal_fd, &rd_set)) {
-        PGL_LOG() << "Data available on signal fd=" << _signal_fd;
-        masterReceiveSignal();
-        FD_CLR(_signal_fd, &rd_set);
-      }
-
-      /*
-       * Handle writes before reads to free some memory
-       */
-      for (auto it = _tasks_wr.begin(); it != _tasks_wr.end(); ) {
-        const int fd = it->first;
-
-        if (FD_ISSET(fd, &wr_set)) {
-          auto& queue = it->second;
+  void Group::masterMainloopProcessReadEvents(fd_set& rd_set, int max_rfd)
+  {
+    /* Handle reads */
+    for (int fd = 0; fd <= max_rfd; ++fd) {
+      if (FD_ISSET(fd, &rd_set)) {
+        if (_tasks_rd.count(fd) == 0) {
+          /* Do not create a new task if we are in the termination phase */
+          if (_group_terminate) {
+            PGL_LOG() << "Termination phase. Ignoring message on fd=" << fd;
+            continue;
+          }
+          /* Create a new RecvHeaderTask */
+          PGL_LOG() << "Data available on fd=" << fd << "."
+            << " Trying to read message header.";
+          masterReceiveHeader(fd);
+        }
+        else {
+          /* Handle existing read task */
+          auto& queue = _tasks_rd[fd];
 
           if (queue.empty()) {
-            PGL_LOG() << "BUG: empty write queue for active fd=" << fd;
-            it = _tasks_wr.erase(it);
+            PGL_LOG() << "BUG: Empty read queue for active fd=" << fd;
+            _tasks_rd.erase(fd);
             continue;
           }
 
           FDTask* task = queue.front();
           assert(task->fd() == fd);
 
-          PGL_LOG() << "Running write task for fd=" << fd;
+          PGL_LOG() << "Running read task for fd=" << fd;
 
           if (task->run(*this)) {
-            PGL_LOG() << "Write task for fd=" << fd << " complete, deleting.";
+            PGL_LOG() << "Read task for fd=" << fd << " complete, deleting.";
             queue.pop();
             delete task;
           }
 
           if (queue.empty()) {
-            PGL_LOG() << "Removing empty write queue for fd=" << fd;
-            it = _tasks_wr.erase(it);
+            PGL_LOG() << "Removing empty read queue for fd=" << fd;
+            _tasks_rd.erase(fd);
             continue;
           }
         }
+      }
+    } /* read fd loop */
 
-        ++it;
-      } /* write task loop end */
+    return;
+ }
 
-      /* Handle reads */
-      for (int fd = 0; fd <= max_rfd; ++fd) {
-        if (FD_ISSET(fd, &rd_set)) {
-          if (_tasks_rd.count(fd) == 0) {
-            /* Do not create a new task if we are in the termination phase */
-            if (_group_terminate) {
-              PGL_LOG() << "Termination phase. Ignoring message on fd=" << fd;
-              continue;
-            }
-            /* Create a new RecvHeaderTask */
-            PGL_LOG() << "Data available on fd=" << fd << "."
-              << " Trying to read message header.";
-            masterReceiveHeader(fd);
-          }
-          else {
-            /* Handle existing read task */
-            auto& queue = _tasks_rd[fd];
+  void Group::masterMainloopProcessEvents(fd_set& rd_set, fd_set& wr_set, int max_rfd)
+  {
+    /*
+     * Handle signals first
+     */
+    if (FD_ISSET(_signal_fd, &rd_set)) {
+      PGL_LOG() << "Data available on signal fd=" << _signal_fd;
+      masterReceiveSignal();
+      FD_CLR(_signal_fd, &rd_set);
+    }
+    /*
+     * Handle write and read events
+     */
+    masterMainloopProcessWriteEvents(wr_set);
+    masterMainloopProcessReadEvents(rd_set, max_rfd);
 
-            if (queue.empty()) {
-              PGL_LOG() << "BUG: Empty read queue for active fd=" << fd;
-              _tasks_rd.erase(fd);
-              continue;
-            }
+    return;
+  }
 
-            FDTask* task = queue.front();
-            assert(task->fd() == fd);
+  void Group::masterMainloop()
+  {
+    PGL_LOG() << "Entering master mainloop";
 
-            PGL_LOG() << "Running read task for fd=" << fd;
+    while (!masterMainloopTerminated()) {
+      int max_fd = -1;
+      int max_rfd = -1;
+      fd_set rd_set;
+      fd_set wr_set;
+      FD_ZERO(&rd_set);
+      FD_ZERO(&wr_set);
 
-            if (task->run(*this)) {
-              PGL_LOG() << "Read task for fd=" << fd << " complete, deleting.";
-              queue.pop();
-              delete task;
-            }
+      masterMainloopCollectActiveFDs(rd_set, wr_set, max_fd, max_rfd);
+      if (masterMainloopWaitForEvents(rd_set, wr_set, max_fd) < 1) {
+        continue;
+      }
+      masterMainloopProcessEvents(rd_set, wr_set, max_rfd);
+    }
 
-            if (queue.empty()) {
-              PGL_LOG() << "Removing empty read queue for fd=" << fd;
-              _tasks_rd.erase(fd);
-              continue;
-            }
-          }
-        }
-      } /* read fd loop */
-
-    } /* select loop */
-
+    PGL_LOG() << "Returning from master mainloop";
     return;
   }
 

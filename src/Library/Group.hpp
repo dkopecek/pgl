@@ -31,6 +31,7 @@
 #include <unistd.h>
 #include <climits>
 #include <iostream>
+#include <sys/select.h>
 
 namespace pgl
 {
@@ -248,7 +249,14 @@ namespace pgl
     int memberRun();
     void masterStartProcesses();
     void masterStopProcesses();
-    void masterProcessEvents();
+    void masterMainloopCollectActiveFDs(fd_set& rd_set, fd_set& wr_set,
+        int& max_fd, int& max_rfd);
+    bool masterMainloopTerminated() const;
+    int masterMainloopWaitForEvents(fd_set& rd_set, fd_set& wr_set, int max_fd);
+    void masterMainloopProcessWriteEvents(fd_set& wr_set);
+    void masterMainloopProcessReadEvents(fd_set& rd_set, int max_rfd);
+    void masterMainloopProcessEvents(fd_set& rd_set, fd_set& wr_set, int max_rfd);
+    void masterMainloop();
     int groupExitCode();
     void masterReceiveSignal();
     void masterReceiveHeader(int fd);
