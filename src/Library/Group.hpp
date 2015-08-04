@@ -29,7 +29,7 @@
 #include <mutex>
 #include <type_traits>
 #include <unistd.h>
-#include <climits>
+#include <limits.h>
 #include <iostream>
 #include <sys/select.h>
 

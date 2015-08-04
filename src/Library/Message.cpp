@@ -18,7 +18,7 @@
 //
 #include "Message.hpp"
 #include "Exceptions.hpp"
-#include <cstring>
+#include <string.h>
 
 namespace pgl
 {

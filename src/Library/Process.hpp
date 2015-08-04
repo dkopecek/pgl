@@ -24,7 +24,7 @@
 #include <random>
 #include <queue>
 #include <atomic>
-#include <cstdint>
+#include <stdint.h>
 #include <stddef.h>
 #include <sys/types.h>
 #include <unistd.h>

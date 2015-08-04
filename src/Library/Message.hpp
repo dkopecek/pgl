@@ -20,7 +20,7 @@
 
 #include "Exceptions.hpp"
 #include <string>
-#include <cstdint>
+#include <stdint.h>
 #include <stddef.h>
 #include <sys/types.h>
 #include <unistd.h>

@@ -58,8 +58,26 @@ AC_SUBST(LT_AGE)
 #PKG_CHECK_MODULES([sodium], [libsodium >= 0.4.5], [],
 #                  AC_MSG_FAILURE([libsodium development files not found!]))
 
-# Checks for header files.
-AC_CHECK_HEADERS([stddef.h stdint.h string.h sys/socket.h unistd.h])
+# Checks for required header files.
+AC_CHECK_HEADERS([\
+assert.h \
+errno.h \
+fcntl.h \
+limits.h \
+signal.h \
+stddef.h \
+stdint.h \
+string.h \
+sys/prctl.h \
+sys/resource.h \
+sys/select.h \
+sys/signalfd.h \
+sys/socket.h \
+sys/time.h \
+sys/types.h \
+sys/wait.h \
+time.h \
+unistd.h],[],[AC_MSG_ERROR([Some of the required header files were not found on your system!])])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_CHECK_HEADER_STDBOOL

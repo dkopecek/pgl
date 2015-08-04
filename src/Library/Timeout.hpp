@@ -18,7 +18,7 @@
 //
 
 #include "Exceptions.hpp"
-#include <cstdint>
+#include <stdint.h>
 
 namespace pgl
 {
