@@ -1,7 +1,6 @@
 # pgl - Process Group Library
 
-A C++ library that provides an API which simplifies the task of process
-isolation implementation.
+A C++ library that simplifies implementation of process isolation and privilege separation.
 
 ## Goals
 
