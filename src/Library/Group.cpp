@@ -107,6 +107,11 @@ namespace pgl
     _task_send_timeout_usec = 5 * 1000 * 1000;
     _task_recv_timeout_usec = 5 * 1000 * 1000;
 
+    /*
+     * Default message size limit (bytes).
+     */
+    _message_size_limit = 1* 1024 * 1024;
+
     return;
   }
 
@@ -539,6 +544,13 @@ namespace pgl
     return;
   }
 
+  bool Group::inspectMessageHeader(const Message::Header& header, int fd)
+  {
+    /* TODO: check size limits */
+    /* TODO: check sender pid */
+    return true;
+  }
+
   /////
   //
   // pgl::Group::FDTask method definitions
@@ -794,18 +806,31 @@ namespace pgl
 
   bool Group::HeaderRecvTask::process(Group& group)
   {
-    //
-    // TODO: check sender pid
-    // TODO: check size limits
-    //
+    /*
+     * Inspect the received message header. If some check fails during the
+     * inspection procedure, the method will handle the faulty process
+     * accordingly and return false. We will therefore short-circuit the
+     * current task and return true to the caller.
+     */
+    if (!group.inspectMessageHeader(_header, fd())) {
+      PGL_LOG() << "Received header didn't pass the inspection procedure."
+        << " Marking task as complete.";
+      return true;
+    }
+
     FDTask* task = new MessageRecvTask(fd(), _header, group.getTaskRecvTimeout());
 
-    if (task->run(group)) {
-      /* The task is complete, delete it */
+    try {
+      if (task->run(group)) {
+        /* The task is complete, delete it */
+        delete task;
+      }
+      else {
+        group.masterAddReadTask(task);
+      }
+    } catch(...) {
       delete task;
-    }
-    else {
-      group.masterAddReadTask(task);
+      throw PGL_BUG("Unexpected exception caught during task execution.");
     }
 
     return true;

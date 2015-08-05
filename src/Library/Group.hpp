@@ -81,6 +81,9 @@ namespace pgl
     void setTaskRecvTimeout(unsigned int usec);
     unsigned int getTaskRecvTimeout() const;
 
+    void setMessageSizeLimit(size_t bytes);
+    size_t getMessageSizeLimit() const;
+
   protected:
     class FDTask
     {
@@ -267,7 +270,7 @@ namespace pgl
     void masterPIDLookupReply(Message&&, int from_fd);
     void masterTerminate();
     void masterSetTerminationTimeout(unsigned int usec);
-
+    bool inspectMessageHeader(const Message::Header& header, int fd);
   private:
     /*
      * argc and argv values the were passed to the main()
@@ -346,5 +349,10 @@ namespace pgl
      * Task recv task timeout
      */
     unsigned int _task_recv_timeout_usec;
+    /*
+     * Message size limit in bytes. Applies only to the
+     * data part of the message.
+     */
+    size_t _message_size_limit;
   };
 } /* namespace pgl */
