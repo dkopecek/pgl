@@ -22,12 +22,16 @@ CXXFLAGS_DEBUG_ENABLED="-g -O0"
 
 #
 # Additional CXXFLAGS used when --disable-debug-build is used
-# and when --enable-debug-build is
 #
 # Don't add -DNDEBUG here. It's added to the generated config.h
 # header file.
 #
 CXXFLAGS_DEBUG_DISABLED=""
+
+#
+# Additional CXXFLAGS used when --enable-optimized-build is used
+#
+CXXFLAGS_OPTIMIZED_BUILD="-O2 -ffast-math -fomit-frame-pointer"
 
 # Checks for programs.
 AC_PROG_CXX
@@ -100,11 +104,24 @@ AC_ARG_ENABLE([debug-build],
        *) AC_MSG_ERROR([bad value ${enableval} for --enable-debug-build]) ;;
      esac], [debug=no])
 
+AC_ARG_ENABLE([optimized-build],
+              [AC_HELP_STRING([--enable-optimized-build], [enable optimized build (default=no)])],
+              [case "${enableval}" in
+                yes) optimized=yes ;;
+                no) optimized=no ;;
+                *) AC_MSG_ERROR([bad value ${enableval} for --enable-optimized-build]) ;;
+               esac], [optimized=no])
+
 if test "$debug" = "yes"; then
    CXXFLAGS="$CXXFLAGS $CXXFLAGS_DEBUG_ENABLED"
 else
    CXXFLAGS="$CXXFLAGS $CXXFLAGS_DEBUG_DISABLED"
    AC_DEFINE([NDEBUG], [1], [Debug build disabled])
+fi
+
+if test "$optimized" = "yes"; then
+  CXXFLAGS="$CXXFLAGS $CXXFLAGS_OPTIMIZED_BUILD"
+  AC_DEFINE([OPTIMIZED], [1], [Optimized build])
 fi
 
 AC_CONFIG_FILES([Makefile libpgl.pc])
