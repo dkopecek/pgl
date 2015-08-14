@@ -71,7 +71,7 @@ namespace pgl
   extern Logger G_logger;
 
 #define PGL_LOG() \
-  if (G_logger.isEnabled()) \
-  G_logger(__FILE__, __LINE__, __PRETTY_FUNCTION__)
+  if (pgl::G_logger.isEnabled()) \
+  pgl::G_logger(__FILE__, __LINE__, __PRETTY_FUNCTION__)
 
 } /* namespace pgl */
