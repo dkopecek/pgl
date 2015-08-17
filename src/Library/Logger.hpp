@@ -22,6 +22,12 @@
 #include <sstream>
 #include <sys/time.h>
 
+#if defined(__GNUC__)
+# define PGL_SOURCE_FILE __BASE_FILE__
+#else
+# define PGL_SOURCE_FILE __FILE__
+#endif
+
 namespace pgl
 {
   class Logger;
@@ -72,6 +78,6 @@ namespace pgl
 
 #define PGL_LOG() \
   if (pgl::G_logger.isEnabled()) \
-  pgl::G_logger(__FILE__, __LINE__, __PRETTY_FUNCTION__)
+  pgl::G_logger(PGL_SOURCE_FILE, __LINE__, __PRETTY_FUNCTION__)
 
 } /* namespace pgl */

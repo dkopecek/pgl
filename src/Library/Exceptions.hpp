@@ -124,7 +124,7 @@ namespace pgl
               errno=PGL_PP_CONCAT(__e,__LINE__))
 
 #define PGL_BUG(text) std::runtime_error(std::string("BUG: ") \
-    + "[" + __FILE__ + "@" + std::to_string(__LINE__) + "] "\
+    + "[" + PGL_SOURCE_FILE + "@" + std::to_string(__LINE__) + "] "\
     + __PRETTY_FUNCTION__\
     + ": " + text)\
 
