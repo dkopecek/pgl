@@ -273,6 +273,7 @@ namespace pgl
       const int fd = it->first;
 
       if (FD_ISSET(fd, &wr_set)) {
+        FD_CLR(fd, &wr_set);
         auto& queue = it->second;
 
         if (queue.empty()) {
@@ -310,6 +311,7 @@ namespace pgl
     /* Handle reads */
     for (int fd = 0; fd <= max_rfd; ++fd) {
       if (FD_ISSET(fd, &rd_set)) {
+        FD_CLR(fd, &rd_set);
         if (_tasks_rd.count(fd) == 0) {
           /* Do not create a new task if we are in the termination phase */
           if (_group_terminate) {
