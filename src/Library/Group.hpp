@@ -84,6 +84,11 @@ namespace pgl
     void setMessageSizeLimit(size_t bytes);
     size_t getMessageSizeLimit() const;
 
+    enum class TerminationAction {
+      Restart,
+      Terminate
+    };
+
   protected:
     class FDTask
     {
@@ -260,8 +265,12 @@ namespace pgl
     void masterMainloopProcessReadEvents(fd_set& rd_set, int max_rfd);
     void masterMainloopProcessEvents(fd_set& rd_set, fd_set& wr_set, int max_rfd);
     void masterMainloop();
-    int groupExitCode();
+    int masterGetExitCode();
+    void masterSetExitCode(int exit_code);
     void masterReceiveSignal();
+    void masterHandleMemberTermination(pid_t pid);
+    TerminationAction masterGetMemberTerminationAction(pid_t pid);
+    void masterRestartMember(pid_t pid);
     void masterReceiveHeader(int fd);
     void masterAddReadTask(FDTask* task);
     void masterAddWriteTask(FDTask* task);
@@ -337,6 +346,10 @@ namespace pgl
      * Group termination flag
      */
     bool _group_terminate;
+    /*
+     * Exit code of the master process
+     */
+    int _group_exit_code;
     /*
      * Timeout object for the graceful termination period
      */

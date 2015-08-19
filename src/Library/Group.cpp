@@ -24,6 +24,7 @@
 #include <sys/signalfd.h>
 #include <assert.h>
 #include <time.h>
+#include <memory>
 
 namespace pgl
 {
@@ -74,6 +75,7 @@ namespace pgl
     _exec_path = exec_path;
     _exec_name = exec_name;
     _group_terminate = false;
+    _group_exit_code = EXIT_SUCCESS;
 
     if (master_mode) {
       _master_mode = true;
@@ -152,7 +154,7 @@ namespace pgl
     masterStartProcesses();
     masterMainloop();
     masterStopProcesses();
-    return groupExitCode();
+    return masterGetExitCode();
   }
 
   void Group::masterStartProcesses()
@@ -369,8 +371,24 @@ namespace pgl
     /*
      * Handle write and read events
      */
-    masterMainloopProcessWriteEvents(wr_set);
-    masterMainloopProcessReadEvents(rd_set, max_rfd);
+_restart:
+    try {
+      masterMainloopProcessWriteEvents(wr_set);
+      masterMainloopProcessReadEvents(rd_set, max_rfd);
+    }
+    catch(const BusError& ex) {
+      if (!ex.isRecoverable() || ex.getPID() == -1) {
+        throw;
+      }
+
+      masterHandleMemberTermination(ex.getPID());
+
+      if (masterMainloopTerminated()) {
+        return;
+      }
+
+      goto _restart;
+    }
 
     return;
   }
@@ -410,6 +428,9 @@ namespace pgl
     PGL_LOG() << "Received signal #" << sig.ssi_signo;
 
     switch(sig.ssi_signo) {
+      case SIGCHLD:
+        masterHandleMemberTermination((pid_t)sig.ssi_pid);
+        break;
       case SIGTERM:
       case SIGINT:
         /* Enter shutdown mode */
@@ -423,29 +444,94 @@ namespace pgl
     return;
   }
 
+  void Group::masterHandleMemberTermination(pid_t pid)
+  {
+    PGL_LOG() << "Handling member termination: pid=" << pid;
+    int status = -1;
+    bool pid_killed = false;
+
+    for (;;) {
+      const pid_t retval = ::waitpid(pid, &status, WNOHANG);
+
+      if (retval == pid) {
+        /* jump out of the loop and process the status */
+        PGL_LOG() << "got member process exit status: " << status;
+        break;
+      }
+      else {
+        PGL_LOG() << "member did not change process state yet, sending SIGKILL";
+        /* the child exists, no state change yet */
+        if (retval == 0 && !pid_killed) {
+          /* Kill it, wait a while and try again waitpid */
+          const struct timespec ts_wait = { 0, 1000 * 1000};
+          ::kill(pid, SIGKILL);
+          ::nanosleep(&ts_wait, nullptr);
+          pid_killed = true;
+        }
+        else {
+          throw SyscallError("waitpid", errno);
+        }
+      }
+    }
+
+    if (WIFEXITED(status)) {
+      PGL_LOG() << "member exited with return value: " << WEXITSTATUS(status);
+      masterSetExitCode(WEXITSTATUS(status));
+    }
+    else if(WIFSIGNALED(status)) {
+      PGL_LOG() << "member was killed by signal: " << WTERMSIG(status);
+    }
+
+    switch(masterGetMemberTerminationAction(pid))
+    {
+      case TerminationAction::Restart:
+        masterRestartMember(pid);
+        break;
+      case TerminationAction::Terminate:
+        masterTerminate();
+        break;
+      default:
+        throw PGL_BUG("Unknown termination action");
+    }
+
+    return;
+  }
+
+  Group::TerminationAction Group::masterGetMemberTerminationAction(pid_t pid)
+  {
+    return Group::TerminationAction::Terminate;
+  }
+
   void Group::masterReceiveHeader(int fd)
   {
     PGL_LOG() << "Receiving header from fd=" << fd;
-    FDTask *task = new Group::HeaderRecvTask(fd, _task_recv_timeout_usec);
+    std::unique_ptr<FDTask> task(new Group::HeaderRecvTask(fd, _task_recv_timeout_usec));
 
-    if (task->run(*this)) {
-      /* The task is complete, delete it */
-      delete task;
-    }
-    else {
-      /*
+    if (!task->run(*this)) {
+       /*
        * Completion of the task would block the thread, add
        * it to read tasks. It'll be completed then the fd becoms
        * readable again.
        */
-      masterAddReadTask(task);
+      masterAddReadTask(task.release());
     }
+
     return;
   }
 
-  int Group::groupExitCode()
+  void Group::masterRestartMember(pid_t pid)
   {
-    return EXIT_SUCCESS;
+  }
+
+  int Group::masterGetExitCode()
+  {
+    return _group_exit_code;
+  }
+
+  void Group::masterSetExitCode(int exit_code)
+  {
+    _group_exit_code = exit_code;
+    return;
   }
 
   int Group::memberRun()
@@ -820,18 +906,13 @@ namespace pgl
       return true;
     }
 
-    FDTask* task = new MessageRecvTask(fd(), _header, group.getTaskRecvTimeout());
+    std::unique_ptr<FDTask> task(new MessageRecvTask(fd(), _header, group.getTaskRecvTimeout()));
 
     try {
-      if (task->run(group)) {
-        /* The task is complete, delete it */
-        delete task;
-      }
-      else {
-        group.masterAddReadTask(task);
+      if (!task->run(group)) {
+        group.masterAddReadTask(task.release());
       }
     } catch(...) {
-      delete task;
       throw PGL_BUG("Unexpected exception caught during task execution.");
     }
 
