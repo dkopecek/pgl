@@ -139,6 +139,18 @@ namespace pgl
     return _task_recv_timeout_usec;
   }
 
+
+  void Group::setMessageSizeLimit(size_t bytes)
+  {
+    _message_size_limit = bytes;
+    return;
+  }
+
+  size_t Group::getMessageSizeLimit() const
+  {
+    return _message_size_limit;
+  }
+
   int Group::run()
   {
     if (_master_mode) {
@@ -634,8 +646,11 @@ _restart:
 
   bool Group::inspectMessageHeader(const Message::Header& header, int fd)
   {
-    /* TODO: check size limits */
     /* TODO: check sender pid */
+    if (header.size >= getMessageSizeLimit()) {
+      return false;
+    }
+
     return true;
   }
 
