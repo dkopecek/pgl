@@ -20,6 +20,8 @@
 #include "Logger.hpp"
 #include <stdexcept>
 #include <errno.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 namespace pgl
 {
@@ -42,11 +44,13 @@ namespace pgl
   class BusError : public Exception
   {
     public:
-      BusError(bool recoverable)
+      BusError(bool recoverable, pid_t pid = -1)
       {
         setRecoverable(recoverable);
+        setPID(-1);
         try {
-          PGL_LOG() << "BusError: recoverable=" << recoverable;
+          PGL_LOG() << "BusError: pid=" << getPID()
+            << ", recoverable=" << recoverable;
         } catch(...) {
         }
       }
@@ -66,8 +70,21 @@ namespace pgl
         _recoverable = recoverable;
         return;
       }
+
+      void setPID(pid_t pid)
+      {
+        _pid = pid;
+        return;
+      }
+
+      pid_t getPID() const
+      {
+        return _pid;
+      }
+
     private:
       bool _recoverable;
+      pid_t _pid;
   };
 
   /**
