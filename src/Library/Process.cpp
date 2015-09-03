@@ -44,6 +44,8 @@ namespace pgl
     }
     _bus_send_timeout_usec = 10 * 1000 * 1000;
     _bus_recv_timeout_usec = 10 * 1000 * 1000;
+    _pgl_signal_handling = true;
+    _signal_fd = -1;
   }
 
   Process::~Process()
@@ -107,7 +109,7 @@ namespace pgl
     return;
   }
 
-  void Process::getMessageBusFDs(int *rfd_ptr, int *wfd_ptr)
+  void Process::getMessageBusFDs(int *rfd_ptr, int *wfd_ptr) const
   {
     if (rfd_ptr) {
       *rfd_ptr = _bus_rfd;
@@ -116,6 +118,17 @@ namespace pgl
       *wfd_ptr = _bus_wfd;
     }
     return;
+  }
+
+  void Process::setSignalFD(int fd)
+  {
+    _signal_fd = fd;
+    return;
+  }
+
+  int Process::getSignalFD() const
+  {
+    return _signal_fd;
   }
 
   void Process::setMessageBusSendTimeout(unsigned int usec)
@@ -138,6 +151,50 @@ namespace pgl
   unsigned int Process::getMessageBusRecvTimeout() const
   {
     return _bus_recv_timeout_usec;
+  }
+
+  void Process::processSignals()
+  {
+    if (!_pgl_signal_handling) {
+      return;
+    }
+    try {
+      struct signalfd_siginfo ssi;
+
+      if (read(_signal_fd, &ssi, sizeof ssi) != sizeof ssi) {
+        if (errno == EWOULDBLOCK || errno == EAGAIN) {
+          return;
+        }
+        throw SyscallError("read(_signal_fd)", errno);
+      }
+
+      signalHandler(ssi);
+    }
+    catch(...) {
+      PGL_LOG() << "An exception occured during signal processing. Terminating.";
+      setProcessTerminate(255);
+    }
+  }
+
+  void Process::setSignalHandling(bool enabled)
+  {
+    _pgl_signal_handling = enabled;
+    return;
+  }
+
+  void Process::signalHandler(const struct signalfd_siginfo& ssi)
+  {
+    PGL_LOG() << "Default signal handler called for signal #" << ssi.ssi_signo;
+
+    switch (ssi.ssi_signo) {
+      case SIGTERM:
+      case SIGINT:
+      case SIGQUIT:
+        setProcessTerminate(EXIT_SUCCESS);
+        break;
+    }
+
+    return;
   }
 
   /*
@@ -182,16 +239,33 @@ namespace pgl
 
   int Process::messageBusWait(unsigned int max_wait_usec)
   {
+    int nfds = -1;
     int fd = -1;
+    struct timeval tv_timeout = { 0, max_wait_usec };
+    fd_set rd_set;
+
     getMessageBusFDs(&fd, nullptr);
 
-    fd_set rd_set;
-    FD_ZERO(&rd_set);
-    FD_SET(fd, &rd_set);
+    do {
+      FD_ZERO(&rd_set);
+      FD_SET(fd, &rd_set);
+      FD_SET(getSignalFD(), &rd_set);
 
-    struct timeval tv_timeout = { 0, max_wait_usec };
-    const int nfds = select(fd + 1, &rd_set, nullptr, nullptr,
-        max_wait_usec > 0 ? &tv_timeout : nullptr);
+      nfds = select(std::max(fd, getSignalFD()) + 1,
+          &rd_set, nullptr, nullptr,
+          max_wait_usec > 0 ? &tv_timeout : nullptr);
+
+      if (nfds < 0) {
+        return -1;
+      }
+      if (nfds > 0 && FD_ISSET(getSignalFD(), &rd_set)) {
+        processSignals();
+        --nfds;
+      }
+      if (nfds == 1 && FD_ISSET(fd, &rd_set)) {
+        break;
+      }
+    } while(nfds != 0);
 
     return nfds;
   }
@@ -233,6 +307,8 @@ namespace pgl
   {
     std::unique_lock<std::mutex> lock_w(_bus_wfd_mutex, std::defer_lock);
 
+    processSignals();
+
     if (lock_bus) {
       lock_w.lock();
     }
@@ -268,6 +344,8 @@ namespace pgl
   Message Process::messageBusRecvMessage(Message::Type type, bool lock_bus)
   {
     std::unique_lock<std::mutex> lock_r(_bus_rfd_mutex, std::defer_lock);
+
+    processSignals();
 
     if (lock_bus) {
       lock_r.lock();
@@ -432,30 +510,51 @@ namespace pgl
       ::close(bus_fd[0]);
       ::close(STDIN_FILENO);
       ::close(STDOUT_FILENO);
-#if defined(NDEBUG)
       ::close(STDERR_FILENO);
-      int null_fd = open("/dev/null", O_RDONLY);
+
+      const int null_fd = open("/dev/null", O_RDONLY);
       if (null_fd == -1) {
         throw SyscallError("open(/dev/null, O_RDONLY)", errno);
       }
+
       if (::dup2(null_fd, STDERR_FILENO) == -1) {
         PGL_PROTECT_ERRNO {
           ::close(null_fd);
         }
         throw SyscallError("dup2", errno);
       }
-#endif
-      if (::dup2(bus_fd[1], STDIN_FILENO) == -1 ||
-          ::dup2(bus_fd[1], STDOUT_FILENO) == -1) {
+
+      if (::dup2(null_fd, STDIN_FILENO) == -1 ||
+          ::dup2(null_fd, STDOUT_FILENO) == -1) {
         PGL_PROTECT_ERRNO {
           ::close(bus_fd[1]);
+          ::close(null_fd);
         }
         throw SyscallError("dup2", errno);
       }
 
+      setMessageBusFDs(/*rfd=*/bus_fd[1], /*wfd=*/bus_fd[1]);
+
       if (prctl(PR_SET_PDEATHSIG, SIGTERM) == -1) {
+        ::close(bus_fd[1]);
+        ::close(null_fd);
         throw SyscallError("prctl(PR_SET_PDEATHSIG)", errno);
       }
+
+      sigset_t mask;
+      sigfillset(&mask);
+      sigdelset(&mask, SIGABRT);
+      sigdelset(&mask, SIGSEGV);
+      sigdelset(&mask, SIGILL);
+      sigdelset(&mask, SIGFPE);
+      sigdelset(&mask, SIGBUS);
+
+      const int signal_fd = signalfd(-1, &mask, SFD_NONBLOCK);
+      if (signal_fd < 0) {
+        throw SyscallError("signalfd", errno);
+      }
+
+      setSignalFD(signal_fd);
 
       char **exec_env = nullptr;
       prepareMemberEnvVariables(exec_env);
@@ -465,7 +564,8 @@ namespace pgl
       }
 
       if (_closeall_fds > 0) {
-        closeAllFDs(/*from_fd=*/3 + _closeall_fds);
+        const int highest_open_fd = std::max(signal_fd, bus_fd[1]);
+        closeAllFDs(/*from_fd=*/highest_open_fd + _closeall_fds);
       }
 
       preExecSetup();
@@ -488,10 +588,11 @@ namespace pgl
     /*
      * Allocate memory for the array. The maximum number of
      * items is the number of environment variables to keep
-     * from the master process environment plus the PGL_EXEC_NAME
-     * variable plus an item for the nullptr (therefore +2).
+     * from the master process environment plus the PGL_EXEC_NAME,
+     * PGL_BUS_WFD, PGL_BUS_RFD, PGL_SIGNAL_FD, variables plus
+     * an item for the nullptr (therefore +5).
      */
-    const size_t env_count_max = _keep_env.size() + 2;
+    const size_t env_count_max = _keep_env.size() + 5;
     env_array = new char *[env_count_max];
 
     std::string exec_name_var;
@@ -499,7 +600,25 @@ namespace pgl
     exec_name_var += getName();
     env_array[0] = strdup(exec_name_var.c_str());
 
-    size_t env_index = 1;
+    int bus_wfd = -1, bus_rfd = -1;
+    getMessageBusFDs(&bus_wfd, &bus_rfd);
+
+    std::string bus_wfd_var;
+    bus_wfd_var = "PGL_BUS_WFD=";
+    bus_wfd_var += std::to_string(bus_wfd);
+    env_array[1] = strdup(bus_wfd_var.c_str());
+
+    std::string bus_rfd_var;
+    bus_rfd_var = "PGL_BUS_RFD=";
+    bus_rfd_var += std::to_string(bus_rfd);
+    env_array[2] = strdup(bus_rfd_var.c_str());
+
+    std::string signal_fd_var;
+    signal_fd_var = "PGL_SIGNAL_FD=";
+    signal_fd_var += std::to_string(getSignalFD());
+    env_array[3] = strdup(signal_fd_var.c_str());
+
+    size_t env_index = 4;
     for (auto const& name : _keep_env) {
       const char * const val = getenv(name.c_str());
       if (val == nullptr) {
@@ -535,6 +654,17 @@ namespace pgl
   void Process::kill()
   {
     terminate(SIGKILL);
+  }
+
+  bool Process::processTerminate()
+  {
+    processSignals();
+    return _process_terminate;
+  }
+
+  int Process::processTerminateCode() const
+  {
+    return _process_terminate_code;
   }
 
   void Process::messageBusWrite(int fd, const uint8_t *data, size_t size, unsigned int max_delay_usec)
@@ -727,6 +857,13 @@ namespace pgl
   {
     const unsigned int n = (unsigned int)type % Message::type_count;
     return _bus_recv_queued[n];
+  }
+
+  void Process::setProcessTerminate(int code)
+  {
+    _process_terminate = true;
+    _process_terminate_code = code;
+    return;
   }
 
 } /* namespace pgl */

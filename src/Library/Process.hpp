@@ -24,12 +24,14 @@
 #include <random>
 #include <queue>
 #include <atomic>
+#include <unordered_map>
 #include <stdint.h>
 #include <stddef.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <string.h>
 #include <signal.h>
+#include <sys/signalfd.h>
 #include <time.h>
 #include <sys/wait.h>
 #include <sys/socket.h>
@@ -61,7 +63,9 @@ namespace pgl
     void setExecPath(const std::string& exec_path);
     const std::string& getExecPath() const;
     void setMessageBusFDs(int rfd, int wfd);
-    void getMessageBusFDs(int *rfd_ptr, int *wfd_ptr);
+    void getMessageBusFDs(int *rfd_ptr, int *wfd_ptr) const;
+    void setSignalFD(int fd);
+    int getSignalFD() const;
     void setCloseAllFDs(unsigned int from_fd);
 
     /**
@@ -99,6 +103,17 @@ namespace pgl
      */
     void setMessageBusRecvTimeout(unsigned int usec);
     unsigned int getMessageBusRecvTimeout() const;
+
+    /**
+     * Trigger signal processing code.
+     *
+     * Checks whether there's a pending signal and if true, triggers the
+     * Process::signalHandler method to process it.
+     */
+    void processSignals();
+
+    void setSignalHandling(bool enabled);
+    virtual void signalHandler(const struct signalfd_siginfo& ssi);
 
     //
     // TODO
@@ -208,6 +223,12 @@ namespace pgl
     void stop();
     void kill();
 
+    /*
+     * Get the process termination flag state
+     */
+    bool processTerminate();
+    int processTerminateCode() const;
+
     static const std::string pathBasename(const std::string& path);
   protected:
     static void messageBusWrite(int fd, const uint8_t *data, size_t size, unsigned int max_delay_usec);
@@ -234,6 +255,11 @@ namespace pgl
      * Check whether a message is queued for receiving.
      */
     bool messageBusRecvQueued(Message::Type type) const;
+
+    /*
+     * Set the process termination flag state to true
+     */
+    void setProcessTerminate(int code);
 
   private:
     std::string _name;
@@ -262,5 +288,12 @@ namespace pgl
 
     unsigned int _bus_send_timeout_usec;
     unsigned int _bus_recv_timeout_usec;
+
+    std::atomic<bool> _process_terminate;
+    std::atomic<int> _process_terminate_code;
+    std::atomic<bool> _pgl_signal_handling;
+
+    int _signal_fd;
   };
 } /* namespace pgl */
+

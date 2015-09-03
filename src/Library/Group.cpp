@@ -60,6 +60,9 @@ namespace pgl
 
     const std::string exec_path(path_buffer, path_length);
     const char * exec_name_env = getenv("PGL_EXEC_NAME");
+    const char * bus_rfd_env = getenv("PGL_BUS_RFD");
+    const char * bus_wfd_env = getenv("PGL_BUS_WFD");
+    const char * signal_fd_env = getenv("PGL_SIGNAL_FD");
     bool master_mode;
     std::string exec_name;
 
@@ -100,7 +103,21 @@ namespace pgl
       _master_mode = false;
       _member_instantiated = false;
       _requested_name = exec_name;
-      _signal_fd = -1;
+
+      if (bus_rfd_env == nullptr || bus_wfd_env == nullptr) {
+        throw std::invalid_argument("BUG: PGL_BUS_WFD and/or PGL_BUS_RFD environment variables not set");
+      }
+      _member_bus_wfd = std::stoi(bus_wfd_env);
+      _member_bus_rfd = std::stoi(bus_rfd_env);
+
+      PGL_LOG() << "Set member bus fds to wfd=" << _member_bus_wfd
+        << " rfd=" << _member_bus_rfd;
+
+      if (signal_fd_env == nullptr) {
+        throw std::invalid_argument("BUG: PGL_SIGNAL_FD environment variable not set");
+      }
+     _signal_fd = std::stoi(signal_fd_env);
+     PGL_LOG() << "Set member signal fd to " << _signal_fd;
     }
 
     /*

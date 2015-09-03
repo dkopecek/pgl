@@ -243,7 +243,8 @@ namespace pgl
       process_ptr->setName(name);
       process_ptr->setPID(::getpid());
       process_ptr->setExecPath(_exec_path);
-      process_ptr->setMessageBusFDs(/*rfd=*/0, /*wfd*/1);
+      process_ptr->setMessageBusFDs(/*rfd=*/_member_bus_rfd, /*wfd=*/_member_bus_wfd);
+      process_ptr->setSignalFD(_signal_fd);
 
       _process_by_name.emplace(name, process_ptr);
       _process_by_pid.emplace(::getpid(), process_ptr);
@@ -367,5 +368,11 @@ namespace pgl
      * data part of the message.
      */
     size_t _message_size_limit;
+    /*
+     * File descriptors for the member to use as the message bus
+     * file descriptors (write fd, read fd)
+     */
+    int _member_bus_wfd;
+    int _member_bus_rfd;
   };
 } /* namespace pgl */

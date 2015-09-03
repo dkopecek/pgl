@@ -47,7 +47,8 @@ pkginclude_HEADERS=\
 bin_PROGRAMS=\
 	test \
 	minprivs \
-	fd-send-recv
+	fd-send-recv \
+	signals
 
 test_SOURCES=\
 	src/Examples/test.cpp
@@ -76,3 +77,15 @@ fd_send_recv_CPPFLAGS=\
 
 fd_send_recv_LDADD=\
 	$(top_builddir)/libpgl.la
+
+signals_SOURCES=\
+	src/Examples/signals.cpp
+
+signals_CPPFLAGS=\
+	-I$(top_srcdir)/src/Library
+
+signals_LDADD=\
+	$(top_builddir)/libpgl.la
+
+
+
