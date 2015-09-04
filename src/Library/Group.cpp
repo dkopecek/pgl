@@ -639,6 +639,7 @@ _restart:
     PGL_LOG() << "Routing message to PID " << pid_to;
     process->getMessageBusFDs(/*rfd_ptr=*/nullptr, /*wfd_ptr=*/&fd);
     FDTask* task = new MessageSendTask(fd, std::move(msg), _task_send_timeout_usec);
+    task->setRelatedPID(process->getPID());
     masterAddWriteTask(task);
     return;
   }
@@ -736,7 +737,8 @@ _restart:
   Group::FDTask::FDTask(const int fd, const unsigned int usec_timeout)
     : _fd(fd),
       _timeout(usec_timeout),
-      _failed(false)
+      _failed(false),
+      _related_pid(-1)
   {
   }
 
@@ -779,10 +781,21 @@ _restart:
   bool Group::FDTask::failTask(bool recoverable)
   {
     if (failed()) {
-      throw BusError(recoverable);
+      throw BusError(recoverable, relatedPID());
     }
     markAsFailed();
     return false;
+  }
+
+  pid_t Group::FDTask::relatedPID() const
+  {
+    return _related_pid;
+  }
+
+  void Group::FDTask::setRelatedPID(pid_t pid)
+  {
+    _related_pid = pid;
+    return;
   }
 
   /////

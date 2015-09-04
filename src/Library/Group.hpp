@@ -102,7 +102,11 @@ namespace pgl
       const Timeout& timeout() const;
       bool failed() const;
       void markAsFailed();
+      pid_t relatedPID() const;
+      void setRelatedPID(pid_t pid);
+
       virtual bool run(Group& group) = 0;
+
     protected:
       bool failTask(bool recoverable);
 
@@ -110,6 +114,7 @@ namespace pgl
       const int _fd;
       Timeout _timeout;
       bool _failed;
+      pid_t _related_pid;
     };
 
     class FDRecvTask : public FDTask
