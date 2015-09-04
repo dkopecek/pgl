@@ -679,7 +679,8 @@ _restart:
 
   Group::FDTask::FDTask(const int fd, const unsigned int usec_timeout)
     : _fd(fd),
-      _timeout(usec_timeout)
+      _timeout(usec_timeout),
+      _failed(false)
   {
   }
 
@@ -706,6 +707,26 @@ _restart:
   const Timeout& Group::FDTask::timeout() const
   {
     return _timeout;
+  }
+
+  bool Group::FDTask::failed() const
+  {
+    return _failed;
+  }
+
+  void Group::FDTask::markAsFailed()
+  {
+    _failed = true;
+    return;
+  }
+
+  bool Group::FDTask::failTask(bool recoverable)
+  {
+    if (failed()) {
+      throw BusError(recoverable);
+    }
+    markAsFailed();
+    return false;
   }
 
   /////
@@ -777,12 +798,13 @@ _restart:
         return false;
       }
       else {
-        throw BusError(/*recoverable=*/true);
+        PGL_LOG() << "read failed with errno=" << errno;
+        return failTask(/*recoverable=*/true);
       }
     }
     else if (size_read == 0) {
       /* EOF */
-      throw BusError(/*recoverable=*/false);
+      return failTask(/*recoverable=*/false);
     }
     else {
       _size_received += size_read;
@@ -878,12 +900,13 @@ _restart:
         return false;
       }
       else {
-        throw BusError(/*recoverable=*/false);
+        PGL_LOG() << "write failed with errno=" << errno;
+        return failTask(/*recoverable=*/false);
       }
     }
     else if (size_write == 0) {
       /* EOF */
-      throw BusError(/*recoverable=*/false);
+      return failTask(/*recoverable=*/false);
     }
     else {
       _size_written += size_write;

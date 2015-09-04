@@ -100,12 +100,16 @@ namespace pgl
       bool operator>(const FDTask& rhs) const;
       int fd() const;
       const Timeout& timeout() const;
-
+      bool failed() const;
+      void markAsFailed();
       virtual bool run(Group& group) = 0;
+    protected:
+      bool failTask(bool recoverable);
 
     private:
       const int _fd;
       Timeout _timeout;
+      bool _failed;
     };
 
     class FDRecvTask : public FDTask
