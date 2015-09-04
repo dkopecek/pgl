@@ -270,7 +270,7 @@ namespace pgl
     for (auto const& map_entry : _process_by_pid) {
       auto const& process = map_entry.second;
       int fd = -1;
-      process->getMessageBusFDs(&fd, nullptr);
+      process->getMessageBusFDs(/*rfd_ptr=*/&fd, /*wfd_ptr=*/nullptr);
       if (fd == -1) {
         throw PGL_BUG("getMessageBusFDs method returned an invalid fd");
       }
@@ -637,7 +637,7 @@ _restart:
     auto const& process = _process_by_pid[pid_to];
     int fd = -1;
     PGL_LOG() << "Routing message to PID " << pid_to;
-    process->getMessageBusFDs(nullptr, &fd);
+    process->getMessageBusFDs(/*rfd_ptr=*/nullptr, /*wfd_ptr=*/&fd);
     FDTask* task = new MessageSendTask(fd, std::move(msg), _task_send_timeout_usec);
     masterAddWriteTask(task);
     return;
