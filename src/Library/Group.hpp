@@ -285,6 +285,14 @@ namespace pgl
     void masterTerminate();
     void masterSetTerminationTimeout(unsigned int usec);
     bool inspectMessageHeader(const Message::Header& header, int fd);
+    std::shared_ptr<Process> getProcessByFD(int fd);
+    std::shared_ptr<Process> getProcessByPID(pid_t pid);
+    /**
+     * Removes process instance from the process-by-pid, process-by-fd map
+     * and tasks related to the process fds.
+     */
+    void removeProcessRelatedState(std::shared_ptr<Process>& process);
+
   private:
     /*
      * argc and argv values the were passed to the main()
@@ -312,10 +320,14 @@ namespace pgl
      */
     std::multimap<std::string, std::shared_ptr<Process> > _process_by_name;
     /*
-     * Map of active PIDs to their pgl::Process intances. PIDs are
+     * Map of active PIDs to their pgl::Process instances. PIDs are
      * unique, therefore we use unordered_map here.
      */
     std::unordered_map<pid_t, std::shared_ptr<Process> > _process_by_pid;
+    /*
+     * Map of active FDs to their pgl::Process instances.
+     */
+    std::unordered_map<int, std::shared_ptr<Process> > _process_by_fd;
     /*
      * Maste mode flag. Set in constructor based on the PGL_EXEC_NAME environment
      * variable. If set, then the current process should run as the group master,

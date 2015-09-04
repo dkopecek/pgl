@@ -195,6 +195,16 @@ namespace pgl
         pid_t pid = process->spawn(_process_argc, _process_argv);
         process->setPID(pid);
         _process_by_pid[pid] = process;
+
+        int rfd = -1, wfd = -1;
+        process->getMessageBusFDs(/*rfd_ptr=*/&rfd, /*wfd_ptr=*/&wfd);
+
+        if (rfd == -1 || wfd == -1) {
+          throw PGL_BUG("Got invalid message bus fds after process spawn");
+        }
+
+        _process_by_fd[rfd] = process;
+        _process_by_fd[wfd] = process;
       }
     }
     catch(const std::exception& ex) {
@@ -205,6 +215,8 @@ namespace pgl
   void Group::masterStopProcesses()
   {
     std::unique_lock<std::mutex> map_lock(_process_map_mutex);
+    std::queue<std::shared_ptr<Process> > cleanup_queue;
+
     for (auto& process_entry : _process_by_pid) {
       auto process = process_entry.second;
       try {
@@ -212,7 +224,15 @@ namespace pgl
       } catch(const std::exception& ex) {
         process->kill();
       }
+      cleanup_queue.push(process);
     }
+
+    while (!cleanup_queue.empty()) {
+      removeProcessRelatedState(cleanup_queue.front());
+      cleanup_queue.pop();
+    }
+
+    return;
   }
 
   bool Group::masterMainloopTerminated() const
@@ -478,6 +498,7 @@ _restart:
     PGL_LOG() << "Handling member termination: pid=" << pid;
     int status = -1;
     bool pid_killed = false;
+    std::shared_ptr<Process> process = getProcessByPID(pid);
 
     for (;;) {
       const pid_t retval = ::waitpid(pid, &status, WNOHANG);
@@ -510,6 +531,8 @@ _restart:
     else if(WIFSIGNALED(status)) {
       PGL_LOG() << "member was killed by signal: " << WTERMSIG(status);
     }
+
+    removeProcessRelatedState(process);
 
     switch(masterGetMemberTerminationAction(pid))
     {
@@ -669,6 +692,40 @@ _restart:
     }
 
     return true;
+  }
+
+  std::shared_ptr<Process> Group::getProcessByFD(int fd)
+  {
+    return _process_by_fd.at(fd);
+  }
+
+  std::shared_ptr<Process> Group::getProcessByPID(pid_t pid)
+  {
+    return _process_by_pid.at(pid);
+  }
+
+  void Group::removeProcessRelatedState(std::shared_ptr<Process>& process)
+  {
+    int wfd = -1, rfd = -1;
+    pid_t pid = -1;
+
+    process->getMessageBusFDs(/*rfd_ptr=*/&rfd, /*wfd_ptr=*/&wfd);
+    pid = process->getPID();
+
+    if (pid == -1 || wfd == -1 || rfd == -1) {
+      throw PGL_BUG("Cannot remove process state based on an invalid process instance");
+    }
+
+    PGL_LOG() << "Removing process related state: PID=" << pid
+      << ", fd=[" << wfd << ", " << rfd << "]";
+
+    _process_by_pid.erase(pid);
+    _process_by_fd.erase(wfd);
+    _process_by_fd.erase(rfd);
+    _tasks_rd.erase(rfd);
+    _tasks_wr.erase(wfd);
+
+    return;
   }
 
   /////
