@@ -253,8 +253,7 @@ namespace pgl
        * empty.
        */
       if (_tasks_wr.empty() && _tasks_rd.empty()) {
-        PGL_LOG() << "Task queues are empty. "
-          << "Returning from main loop." << std::endl;
+        PGL_LOG() << "Task queues are empty. Returning from main loop.";
         return true;
       }
     }
