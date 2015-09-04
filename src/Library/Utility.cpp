@@ -163,4 +163,28 @@ namespace pgl
 
     return fd;
   }
+
+
+  rlim_t getResourceLimit(int resource)
+  {
+    struct rlimit rl;
+
+    if (getrlimit(resource, &rl) != 0) {
+      throw SyscallError("getrlimit", errno);
+    }
+
+    return rl.rlim_cur;
+  }
+
+  void setResourceLimit(int resource, rlim_t limit)
+  {
+    const struct rlimit rl = { limit, limit };
+
+    if (setrlimit(resource, &rl) != 0) {
+      throw SyscallError("setrlimit", errno);
+    }
+
+    return;
+  }
+
 } /* namespace pgl */

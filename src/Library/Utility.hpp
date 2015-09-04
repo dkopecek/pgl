@@ -20,6 +20,8 @@
 
 #include <stdint.h>
 #include <time.h>
+#include <sys/time.h>
+#include <sys/resource.h>
 
 namespace pgl
 {
@@ -34,5 +36,12 @@ namespace pgl
    */
   int writeFD(int bus_fd, int fd, unsigned int max_delay_usec);
   int readFD(int bus_fd, unsigned int max_delay_usec);
+
+  /*
+   * Get/set process resource limits.
+   * Throws SyscallError on error.
+   */
+  rlim_t getResourceLimit(int resource);
+  void setResourceLimit(int resource, rlim_t limit);
 
 } /* namespace pgl */
